@@ -5047,17 +5047,15 @@ function sections:CreateESPPreview(Properties)
 		clone.Parent = WorldModel
 		charModel    = clone
 
-		-- Mover al origen con PivotTo
-		pcall(function()
-			local root = clone:FindFirstChild("HumanoidRootPart") or clone:FindFirstChild("Torso")
-			if root then clone:PivotTo(CFrame.new(0, 3.5, 0)) end
-		end)
-
-		-- Posicionar cámara frente al personaje
+-- Mover al origen con PivotTo — se fuerza PrimaryPart para garantizar que funcione
 		local hrp = clone:FindFirstChild("HumanoidRootPart") or clone:FindFirstChild("Torso")
 		if hrp then
-			local focus = hrp.Position + Vector3.new(0, 0.5, 0)
-			VPFCam.CFrame = CFrame.new(focus + Vector3.new(0, 0.5, 7), focus)
+			clone.PrimaryPart = hrp  -- FIX: sin esto PivotTo usa bounding box y falla en pcall
+			-- Rotar 180° para que el frente del personaje mire hacia la cámara (+Z)
+			clone:PivotTo(CFrame.new(0, 3.5, 0) * CFrame.Angles(0, math.rad(180), 0))
+			-- Cámara fija apuntando al centro del personaje desde +Z
+			local focus = Vector3.new(0, 3.5, 0)
+			VPFCam.CFrame = CFrame.new(focus + Vector3.new(0, 0.3, 7), focus)
 		end
 
 		-- Asignar Highlight al clon
