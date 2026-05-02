@@ -4734,90 +4734,75 @@ end
 -- Elemento colapsable que vive dentro de cualquier sección/subtab.
 -- Uso: miSeccion:CreateESPPreview({ Name = "ESP Preview" })
 -- ════════════════════════════════════════════════════════════════════════════
+-- ════════════════════════════════════════════════════════════════════════════
+-- sections:CreateESPPreview  (reemplaza la función completa anterior)
+-- Personaje 3D real del jugador + overlays ESP en tiempo real
+-- ════════════════════════════════════════════════════════════════════════════
 function sections:CreateESPPreview(Properties)
 	Properties = Properties or {}
 
-	-- ── Defaults globales de ESPSettings ─────────────────────────────────────
+	local RunService = game:GetService("RunService")
+	local Players    = game:GetService("Players")
+	local tws        = game:GetService("TweenService")
+	local LP         = Players.LocalPlayer
+
+	-- Defaults ESPSettings
 	if not _G.ESPSettings then
 		_G.ESPSettings = {
-			BoxEnabled      = false, BoxColor     = Color3.fromRGB(255,255,255), BoxThickness = 1,
-			HealthBarEnabled= false,
-			SkeletonEnabled = false,
-			NameEnabled     = false,
-			DistanceEnabled = false,
-			GlowEnabled     = false, GlowColor    = Color3.fromRGB(255,60,60),
-		}
-	end
-	if not _G.ESPHitboxPriority then
-		_G.ESPHitboxPriority = {
-			Head="First", Torso="Second",
-			LeftArm="Third", RightArm="Third",
-			LeftLeg="Fourth", RightLeg="Fourth",
+			BoxEnabled=false, BoxColor=Color3.fromRGB(255,255,255), BoxThickness=1,
+			HealthBarEnabled=false, SkeletonEnabled=false,
+			NameEnabled=false, DistanceEnabled=false,
+			GlowEnabled=false, GlowColor=Color3.fromRGB(255,60,60),
 		}
 	end
 
-	-- ── Colores por prioridad de hitbox ───────────────────────────────────────
-	local PCOL = {
-		First  = Color3.fromRGB(255, 75,  75),
-		Second = Color3.fromRGB(75,  235, 175),
-		Third  = Color3.fromRGB(255, 195, 55),
-		Fourth = Color3.fromRGB(75,  135, 255),
-		Ignore = Color3.fromRGB(140, 140, 145),
-	}
-
-	-- ── Medidas del widget ────────────────────────────────────────────────────
+	-- Medidas
 	local H_HDR    = 18
-	local H_CANVAS = 215
-	local H_LEGEND = 60
+	local H_CANVAS = 230
 	local H_PAD    = 5
-	local H_OPEN   = H_HDR + H_PAD + H_CANVAS + H_PAD + H_LEGEND + H_PAD
-	local isOpen   = true   -- ← empieza EXPANDIDO para que el personaje sea visible
+	local H_OPEN   = H_HDR + H_PAD + H_CANVAS + H_PAD
+	local isOpen   = true
 
-	-- ── Parent correcto (respeta subtabs) ─────────────────────────────────────
 	local parent = self:GetCurrentSubtabContainer()
-
-	-- Asegurarse de que exista el parent
 	if not parent then parent = self.Holder end
 
 	-- ── Contenedor raíz ──────────────────────────────────────────────────────
 	local Outer = Instance.new("Frame")
 	Outer.BackgroundTransparency = 1
-	Outer.BorderSizePixel = 0
-	Outer.Size   = UDim2.new(1, 0, 0, H_OPEN)   -- inicia expandido
-	Outer.ClipsDescendants = true
-	Outer.ZIndex = 3
-	Outer.Parent = parent
+	Outer.BorderSizePixel        = 0
+	Outer.Size                   = UDim2.new(1, 0, 0, H_OPEN)
+	Outer.ClipsDescendants       = true
+	Outer.ZIndex                 = 3
+	Outer.Parent                 = parent
+	library.Renders[#library.Renders+1] = {Outer, {BackgroundTransparency=1}, false}
 
-	-- Registrar para fade del window
-	library.Renders[#library.Renders + 1] = {Outer, {BackgroundTransparency=1}, false}
-
-	-- ── Header ──────────────────────────────────────────────────────────────
+	-- ── Header ───────────────────────────────────────────────────────────────
 	local Hdr = Instance.new("Frame")
-	Hdr.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+	Hdr.BackgroundColor3 = Color3.fromRGB(14,14,14)
 	Hdr.BorderSizePixel  = 0
-	Hdr.Position = UDim2.new(0, 20, 0, 4)
-	Hdr.Size     = UDim2.new(1, -42, 0, 12)
+	Hdr.Position = UDim2.new(0,20,0,4)
+	Hdr.Size     = UDim2.new(1,-42,0,12)
 	Hdr.ZIndex   = 4
 	Hdr.Parent   = Outer
 
 	local AccentBar = Instance.new("Frame")
 	AccentBar.BackgroundColor3 = (self.Window and self.Window.Accent) or Color3.fromRGB(0,170,255)
 	AccentBar.BorderSizePixel  = 0
-	AccentBar.Position = UDim2.new(0, 2, 0.5, -4)
-	AccentBar.Size     = UDim2.new(0, 2, 0, 8)
+	AccentBar.Position = UDim2.new(0,2,0.5,-4)
+	AccentBar.Size     = UDim2.new(0,2,0,8)
 	AccentBar.ZIndex   = 5
 	AccentBar.Parent   = Hdr
 
 	local TitleLbl = Instance.new("TextLabel")
 	TitleLbl.BackgroundTransparency = 1
-	TitleLbl.BorderSizePixel = 0
-	TitleLbl.Position  = UDim2.new(0, 10, 0, 0)
-	TitleLbl.Size      = UDim2.new(1, -24, 1, 0)
+	TitleLbl.BorderSizePixel        = 0
+	TitleLbl.Position  = UDim2.new(0,10,0,0)
+	TitleLbl.Size      = UDim2.new(1,-24,1,0)
 	TitleLbl.ZIndex    = 5
 	TitleLbl.Font      = Enum.Font.Code
 	TitleLbl.RichText  = true
-	TitleLbl.Text      = "<b>" .. (Properties.Name or Properties.name or "ESP Preview") .. "</b>"
-	TitleLbl.TextColor3 = Color3.fromRGB(200, 200, 210)
+	TitleLbl.Text      = "<b>"..(Properties.Name or "ESP Preview").."</b>"
+	TitleLbl.TextColor3 = Color3.fromRGB(200,200,210)
 	TitleLbl.TextSize  = 9
 	TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	TitleLbl.TextStrokeTransparency = 1
@@ -4826,13 +4811,13 @@ function sections:CreateESPPreview(Properties)
 	local Arrow = Instance.new("TextLabel")
 	Arrow.BackgroundTransparency = 1
 	Arrow.BorderSizePixel = 0
-	Arrow.AnchorPoint  = Vector2.new(1, 0.5)
-	Arrow.Position     = UDim2.new(1, -2, 0.5, 0)
-	Arrow.Size         = UDim2.new(0, 12, 1, 0)
+	Arrow.AnchorPoint  = Vector2.new(1,0.5)
+	Arrow.Position     = UDim2.new(1,-2,0.5,0)
+	Arrow.Size         = UDim2.new(0,12,1,0)
 	Arrow.ZIndex       = 5
 	Arrow.Font         = Enum.Font.Code
-	Arrow.Text         = "▴"   -- empieza abierto
-	Arrow.TextColor3   = Color3.fromRGB(120, 120, 135)
+	Arrow.Text         = "▴"
+	Arrow.TextColor3   = Color3.fromRGB(120,120,135)
 	Arrow.TextSize     = 10
 	Arrow.TextXAlignment = Enum.TextXAlignment.Center
 	Arrow.TextStrokeTransparency = 1
@@ -4841,344 +4826,338 @@ function sections:CreateESPPreview(Properties)
 	local HdrBtn = Instance.new("TextButton")
 	HdrBtn.BackgroundTransparency = 1
 	HdrBtn.BorderSizePixel = 0
-	HdrBtn.Size   = UDim2.new(1, 0, 0, H_HDR)
+	HdrBtn.Size   = UDim2.new(1,0,0,H_HDR)
 	HdrBtn.Text   = ""
 	HdrBtn.ZIndex = 6
 	HdrBtn.Parent = Outer
 
-	-- ── Canvas (personaje) ───────────────────────────────────────────────────
+	-- ── Canvas (ViewportFrame + overlays 2D apilados) ─────────────────────────
 	local Canvas = Instance.new("Frame")
-	Canvas.BackgroundColor3 = Color3.fromRGB(11, 11, 14)
-	Canvas.BorderColor3     = Color3.fromRGB(40, 40, 50)
+	Canvas.BackgroundColor3 = Color3.fromRGB(11,11,14)
+	Canvas.BorderColor3     = Color3.fromRGB(40,40,50)
 	Canvas.BorderSizePixel  = 1
-	Canvas.Position = UDim2.new(0, 8, 0, H_HDR + H_PAD)
-	Canvas.Size     = UDim2.new(1, -16, 0, H_CANVAS)
-	Canvas.ZIndex   = 3
-	Canvas.Visible  = true   -- visible porque isOpen = true
-	Canvas.Parent   = Outer
+	Canvas.Position         = UDim2.new(0,8,0,H_HDR+H_PAD)
+	Canvas.Size             = UDim2.new(1,-16,0,H_CANVAS)
+	Canvas.ZIndex           = 3
+	Canvas.ClipsDescendants = true
+	Canvas.Visible          = true
+	Canvas.Parent           = Outer
 
-	-- ── Segmentos del personaje ──────────────────────────────────────────────
-	local segDefs = {
-		{key="Head",     x=0.40, y=0.04, w=0.20, h=0.13},
-		{key="Torso",    x=0.34, y=0.18, w=0.32, h=0.23},
-		{key="LeftArm",  x=0.18, y=0.18, w=0.14, h=0.21},
-		{key="RightArm", x=0.68, y=0.18, w=0.14, h=0.21},
-		{key="LeftLeg",  x=0.30, y=0.42, w=0.16, h=0.28},
-		{key="RightLeg", x=0.54, y=0.42, w=0.16, h=0.28},
-	}
+	-- ── ViewportFrame: renderiza el personaje 3D real ─────────────────────────
+	local VPF = Instance.new("ViewportFrame")
+	VPF.BackgroundTransparency = 1
+	VPF.BorderSizePixel        = 0
+	VPF.Size                   = UDim2.new(1,0,1,0)
+	VPF.ZIndex                 = 4
+	VPF.Ambient                = Color3.fromRGB(170,170,170)
+	VPF.LightColor             = Color3.fromRGB(255,255,255)
+	VPF.LightDirection         = Vector3.new(-1,-2,-1)
+	VPF.Parent                 = Canvas
 
-	local segFrames = {} -- {Frame, Stroke}
+	local WorldModel = Instance.new("WorldModel")
+	WorldModel.Parent = VPF
 
-	for _, d in ipairs(segDefs) do
-		local col = PCOL[_G.ESPHitboxPriority[d.key] or "Ignore"] or PCOL.Ignore
+	local VPFCam = Instance.new("Camera")
+	VPFCam.FieldOfView = 40
+	VPFCam.Parent      = VPF
+	VPF.CurrentCamera  = VPFCam
 
-		local seg = Instance.new("Frame")
-		seg.BackgroundColor3 = col
-		seg.BackgroundTransparency = 0.30
-		seg.BorderSizePixel  = 0
-		seg.Position = UDim2.new(d.x, 0, d.y, 0)
-		seg.Size     = UDim2.new(d.w, 0, d.h, 0)
-		seg.ZIndex   = 5
-		seg.Parent   = Canvas
+	-- ── Highlight (Glow) – objeto 3D dentro del WorldModel ───────────────────
+	local HL = Instance.new("Highlight")
+	HL.FillColor           = Color3.fromRGB(255,60,60)
+	HL.OutlineColor        = Color3.fromRGB(255,60,60)
+	HL.FillTransparency    = 0.72
+	HL.OutlineTransparency = 0.05
+	HL.Enabled             = false
+	HL.Parent              = WorldModel  -- se mueve al Adornee en loadChar()
 
-		local stroke = Instance.new("UIStroke")
-		stroke.Color       = col
-		stroke.Thickness   = 1.5
-		stroke.Transparency = 0
-		stroke.Parent      = seg
+	-- ── Overlay 2D (Box / HealthBar / Labels) sobre el ViewportFrame ─────────
+	local Overlay = Instance.new("Frame")
+	Overlay.BackgroundTransparency = 1
+	Overlay.BorderSizePixel        = 0
+	Overlay.Size                   = UDim2.new(1,0,1,0)
+	Overlay.ZIndex                 = 9
+	Overlay.Parent                 = Canvas
 
-		local lbl = Instance.new("TextLabel")
-		lbl.BackgroundTransparency = 1
-		lbl.BorderSizePixel = 0
-		lbl.Size  = UDim2.new(1,0,1,0)
-		lbl.ZIndex = 6
-		lbl.Font  = Enum.Font.Code
-		lbl.Text  = d.key:upper():sub(1,3)
-		lbl.TextColor3 = Color3.new(1,1,1)
-		lbl.TextTransparency = 0.35
-		lbl.TextSize = 7
-		lbl.TextXAlignment = Enum.TextXAlignment.Center
-		lbl.TextStrokeTransparency = 1
-		lbl.Parent = seg
-
-		segFrames[d.key] = {Frame=seg, Stroke=stroke}
-	end
-
-	-- ── Box ESP (4 líneas) ───────────────────────────────────────────────────
-	local BX = 0.14  local BY = 0.03
-	local BW = 0.72  local BH = 0.78
-	local BT = 0.006 -- grosor base
-
+	local BX,BY,BW,BH = 0.07, 0.01, 0.86, 0.97
 	local function mkLine(x,y,w,h)
 		local f = Instance.new("Frame")
-		f.BackgroundColor3 = Color3.fromRGB(255,255,255)
+		f.BackgroundColor3       = Color3.fromRGB(255,255,255)
 		f.BackgroundTransparency = 1
-		f.BorderSizePixel = 0
+		f.BorderSizePixel        = 0
 		f.Position = UDim2.new(x,0,y,0)
 		f.Size     = UDim2.new(w,0,h,0)
-		f.ZIndex   = 8
-		f.Parent   = Canvas
+		f.ZIndex   = 10
+		f.Parent   = Overlay
 		return f
 	end
+	local LT = mkLine(BX,    BY,    BW,    0.006)
+	local LB = mkLine(BX,    BY+BH, BW,    0.006)
+	local LL = mkLine(BX,    BY,    0.006, BH)
+	local LR = mkLine(BX+BW, BY,    0.006, BH)
 
-	local LT = mkLine(BX,    BY,    BW, BT)   -- top
-	local LB = mkLine(BX,    BY+BH, BW, BT)   -- bottom
-	local LL = mkLine(BX,    BY,    BT, BH)   -- left
-	local LR = mkLine(BX+BW, BY,    BT, BH)   -- right
-
-	-- ── Health Bar ───────────────────────────────────────────────────────────
+	-- Health Bar
 	local HBbg = Instance.new("Frame")
-	HBbg.BackgroundColor3 = Color3.fromRGB(22,22,22)
+	HBbg.BackgroundColor3    = Color3.fromRGB(22,22,22)
 	HBbg.BackgroundTransparency = 0.35
-	HBbg.BorderSizePixel = 0
-	HBbg.Position = UDim2.new(0.07, 0, BY, 0)
-	HBbg.Size     = UDim2.new(0.05, 0, BH, 0)
-	HBbg.ZIndex   = 8
+	HBbg.BorderSizePixel     = 0
+	HBbg.Position = UDim2.new(0.03,0,BY,0)
+	HBbg.Size     = UDim2.new(0.04,0,BH,0)
+	HBbg.ZIndex   = 10
 	HBbg.Visible  = false
-	HBbg.Parent   = Canvas
-
+	HBbg.Parent   = Overlay
 	local HBfill = Instance.new("Frame")
 	HBfill.BackgroundColor3 = Color3.fromRGB(80,220,80)
 	HBfill.BorderSizePixel  = 0
-	HBfill.Position = UDim2.new(0.1, 0, 0.18, 0)
-	HBfill.Size     = UDim2.new(0.8, 0, 0.80, 0)
-	HBfill.ZIndex   = 9
+	HBfill.Position = UDim2.new(0.1,0,0.08,0)
+	HBfill.Size     = UDim2.new(0.8,0,0.84,0)
+	HBfill.ZIndex   = 11
 	HBfill.Parent   = HBbg
 
-	-- ── Skeleton ─────────────────────────────────────────────────────────────
-	-- Joints (x,y) en escala del Canvas
-	local J = {
-		Head={0.500,0.100}, Neck={0.500,0.188}, Torso={0.500,0.295}, Hip={0.500,0.420},
-		LS={0.345,0.208}, RS={0.655,0.208},
-		LE={0.265,0.300}, RE={0.735,0.300},
-		LW={0.240,0.388}, RW={0.760,0.388},
-		LK={0.395,0.570}, RK={0.605,0.570},
-		LF={0.385,0.710}, RF={0.615,0.710},
+	-- Name label
+	local NameLbl = Instance.new("TextLabel")
+	NameLbl.AnchorPoint            = Vector2.new(0.5,1)
+	NameLbl.BackgroundTransparency = 1
+	NameLbl.BorderSizePixel        = 0
+	NameLbl.Position  = UDim2.new(0.5,0,BY,0)
+	NameLbl.Size      = UDim2.new(0.9,0,0,12)
+	NameLbl.ZIndex    = 10
+	NameLbl.Font      = Enum.Font.Code
+	NameLbl.RichText  = true
+	NameLbl.Text      = "<b>"..(LP and LP.Name or "Player_001").."</b>"
+	NameLbl.TextColor3 = Color3.new(1,1,1)
+	NameLbl.TextSize  = 9
+	NameLbl.TextStrokeTransparency = 1
+	NameLbl.Visible   = false
+	NameLbl.Parent    = Overlay
+
+	-- Distance label
+	local DistLbl = Instance.new("TextLabel")
+	DistLbl.AnchorPoint            = Vector2.new(0.5,0)
+	DistLbl.BackgroundTransparency = 1
+	DistLbl.BorderSizePixel        = 0
+	DistLbl.Position  = UDim2.new(0.5,0,BY+BH,0)
+	DistLbl.Size      = UDim2.new(0.9,0,0,10)
+	DistLbl.ZIndex    = 10
+	DistLbl.Font      = Enum.Font.Code
+	DistLbl.Text      = "[ 87m ]"
+	DistLbl.TextColor3 = Color3.fromRGB(150,150,170)
+	DistLbl.TextSize  = 8
+	DistLbl.TextStrokeTransparency = 1
+	DistLbl.Visible   = false
+	DistLbl.Parent    = Overlay
+
+	-- ── Skeleton: partes 3D cilíndricas entre joints ──────────────────────────
+	local skeletonBones = {}
+
+	local BONE_PAIRS_R6 = {
+		{"Head","Torso"},
+		{"Torso","Left Arm"},  {"Torso","Right Arm"},
+		{"Torso","Left Leg"},  {"Torso","Right Leg"},
+		{"Left Arm","Left Leg"},{"Right Arm","Right Leg"},  -- hombro→rodilla (línea lateral)
 	}
-	local BONES = {
-		{"Head","Neck"},{"Neck","Torso"},{"Torso","Hip"},
-		{"Neck","LS"},{"Neck","RS"},{"LS","LE"},{"RS","RE"},{"LE","LW"},{"RE","RW"},
-		{"Hip","LK"},{"Hip","RK"},{"LK","LF"},{"RK","RF"},
+	local BONE_PAIRS_R15 = {
+		{"Head","UpperTorso"},
+		{"UpperTorso","LowerTorso"},
+		{"UpperTorso","LeftUpperArm"}, {"UpperTorso","RightUpperArm"},
+		{"LeftUpperArm","LeftLowerArm"},{"RightUpperArm","RightLowerArm"},
+		{"LeftLowerArm","LeftHand"},   {"RightLowerArm","RightHand"},
+		{"LowerTorso","LeftUpperLeg"}, {"LowerTorso","RightUpperLeg"},
+		{"LeftUpperLeg","LeftLowerLeg"},{"RightUpperLeg","RightLowerLeg"},
+		{"LeftLowerLeg","LeftFoot"},   {"RightLowerLeg","RightFoot"},
 	}
 
-	local CW, CH = 200, 215  -- tamaño asumido del canvas en px
-	local bones = {}
+	local function newBonePart()
+		local p = Instance.new("Part")
+		p.Anchored   = true
+		p.CanCollide = false
+		p.CastShadow = false
+		p.Material   = Enum.Material.Neon
+		p.Color      = Color3.new(1,1,1)
+		p.Size       = Vector3.new(0.1,1,0.1)
+		p.Visible    = false
+		p.Parent     = WorldModel
+		return p
+	end
 
-	for _, b in ipairs(BONES) do
-		local p1 = J[b[1]] local p2 = J[b[2]]
-		if p1 and p2 then
-			local cx = (p1[1]+p2[1])/2
-			local cy = (p1[2]+p2[2])/2
-			local dx = (p2[1]-p1[1])*CW
-			local dy = (p2[2]-p1[2])*CH
-			local len = math.sqrt(dx*dx + dy*dy)
-			local ang = math.deg(math.atan2(dy, dx))
+	local charModel = nil
+	local respawnConn
 
-			local line = Instance.new("Frame")
-			line.AnchorPoint = Vector2.new(0.5, 0.5)
-			line.BackgroundColor3 = Color3.new(1,1,1)
-			line.BackgroundTransparency = 0.25
-			line.BorderSizePixel = 0
-			line.Position = UDim2.new(cx, 0, cy, 0)
-			line.Size     = UDim2.new(0, len, 0, 1.5)
-			line.Rotation = ang
-			line.ZIndex   = 7
-			line.Visible  = false
-			line.Parent   = Canvas
-			table.insert(bones, line)
+	local function clearBones()
+		for _, b in ipairs(skeletonBones) do
+			pcall(function() b.Bone:Destroy() end)
+		end
+		skeletonBones = {}
+	end
+
+	local function buildBones(char)
+		clearBones()
+		local isR6 = (char:FindFirstChild("Torso") ~= nil)
+		local pairs_ = isR6 and BONE_PAIRS_R6 or BONE_PAIRS_R15
+		for _, pair in ipairs(pairs_) do
+			local p1 = char:FindFirstChild(pair[1])
+			local p2 = char:FindFirstChild(pair[2])
+			if p1 and p2 and p1:IsA("BasePart") and p2:IsA("BasePart") then
+				table.insert(skeletonBones, {Bone=newBonePart(), Part1=p1, Part2=p2})
+			end
 		end
 	end
 
-	-- ── Labels ───────────────────────────────────────────────────────────────
-	local NameLbl = Instance.new("TextLabel")
-	NameLbl.AnchorPoint = Vector2.new(0.5, 1)
-	NameLbl.BackgroundTransparency = 1
-	NameLbl.BorderSizePixel = 0
-	NameLbl.Position = UDim2.new(0.5, 0, 0, -2)
-	NameLbl.Size     = UDim2.new(0.8, 0, 0, 11)
-	NameLbl.ZIndex   = 9
-	NameLbl.Font     = Enum.Font.Code
-	NameLbl.RichText = true
-	NameLbl.Text     = "<b>Player_001</b>"
-	NameLbl.TextColor3 = Color3.new(1,1,1)
-	NameLbl.TextSize = 9
-	NameLbl.TextXAlignment = Enum.TextXAlignment.Center
-	NameLbl.TextStrokeTransparency = 1
-	NameLbl.Visible  = false
-	NameLbl.Parent   = Canvas
-
-	local DistLbl = Instance.new("TextLabel")
-	DistLbl.AnchorPoint = Vector2.new(0.5, 0)
-	DistLbl.BackgroundTransparency = 1
-	DistLbl.BorderSizePixel = 0
-	DistLbl.Position = UDim2.new(0.5, 0, 1, 2)
-	DistLbl.Size     = UDim2.new(0.8, 0, 0, 10)
-	DistLbl.ZIndex   = 9
-	DistLbl.Font     = Enum.Font.Code
-	DistLbl.Text     = "[ 87m ]"
-	DistLbl.TextColor3 = Color3.fromRGB(150, 150, 170)
-	DistLbl.TextSize = 8
-	DistLbl.TextXAlignment = Enum.TextXAlignment.Center
-	DistLbl.TextStrokeTransparency = 1
-	DistLbl.Visible  = false
-	DistLbl.Parent   = Canvas
-
-	-- ── Leyenda ──────────────────────────────────────────────────────────────
-	local Legend = Instance.new("Frame")
-	Legend.BackgroundColor3 = Color3.fromRGB(14, 14, 17)
-	Legend.BorderColor3     = Color3.fromRGB(40, 40, 50)
-	Legend.BorderSizePixel  = 1
-	Legend.Position = UDim2.new(0, 8, 0, H_HDR + H_PAD + H_CANVAS + H_PAD)
-	Legend.Size     = UDim2.new(1, -16, 0, H_LEGEND)
-	Legend.ZIndex   = 3
-	Legend.Visible  = true   -- visible porque isOpen = true
-	Legend.Parent   = Outer
-
-	local legendItems = {
-		{n="First",  c=PCOL.First}, {n="Second", c=PCOL.Second},
-		{n="Third",  c=PCOL.Third}, {n="Fourth", c=PCOL.Fourth},
-		{n="Ignore", c=PCOL.Ignore},
-	}
-	local dots = {}
-
-	for i, item in ipairs(legendItems) do
-		local col = (i-1) % 3
-		local row = math.floor((i-1) / 3)
-		local xp  = 0.05 + col * 0.335
-		local yp  = 0.18 + row * 0.52
-
-		local dot = Instance.new("Frame")
-		dot.BackgroundColor3 = item.c
-		dot.BorderSizePixel  = 0
-		dot.AnchorPoint = Vector2.new(0, 0.5)
-		dot.Position = UDim2.new(xp, 0, yp + 0.10, 0)
-		dot.Size     = UDim2.new(0, 8, 0, 8)
-		dot.ZIndex   = 5
-		dot.Parent   = Legend
-		Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-
-		local lbl = Instance.new("TextLabel")
-		lbl.BackgroundTransparency = 1
-		lbl.BorderSizePixel = 0
-		lbl.Position = UDim2.new(xp + 0.02, 11, yp, 0)
-		lbl.Size     = UDim2.new(0.30, 0, 0.38, 0)
-		lbl.ZIndex   = 5
-		lbl.Font     = Enum.Font.Code
-		lbl.Text     = item.n
-		lbl.TextColor3 = Color3.fromRGB(185, 185, 200)
-		lbl.TextSize = 8
-		lbl.TextXAlignment = Enum.TextXAlignment.Left
-		lbl.TextStrokeTransparency = 1
-		lbl.Parent   = Legend
-
-		dots[item.n] = dot
+	local function updateBones(glowCol)
+		for _, b in ipairs(skeletonBones) do
+			local p1,p2 = b.Part1,b.Part2
+			if p1 and p1.Parent and p2 and p2.Parent then
+				local pos1,pos2 = p1.Position, p2.Position
+				local dist = (pos2-pos1).Magnitude
+				if dist > 0.01 then
+					local mid = (pos1+pos2)/2
+					-- CFrame.lookAt: -Z apunta hacia pos2; rotar 90° en X → Y apunta a pos2
+					b.Bone.CFrame = CFrame.lookAt(mid, pos2) * CFrame.Angles(math.pi/2,0,0)
+					b.Bone.Size   = Vector3.new(0.1, dist, 0.1)
+				end
+			end
+			b.Bone.Color = glowCol or Color3.new(1,1,1)
+		end
 	end
 
-	-- ── Toggle abrir / cerrar ────────────────────────────────────────────────
+	-- ── Carga el personaje del jugador en el WorldModel ───────────────────────
+	local function loadChar()
+		-- Limpiar anterior
+		for _, c in ipairs(WorldModel:GetChildren()) do
+			if c:IsA("Model") then c:Destroy() end
+		end
+		charModel = nil
+		clearBones()
+
+		local char = LP and LP.Character
+		if not char then return end
+
+		-- Clonar y limpiar scripts
+		local clone = char:Clone()
+		for _, d in ipairs(clone:GetDescendants()) do
+			if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+				d:Destroy()
+			end
+		end
+		-- Anclar todas las partes (no caen en el WorldModel)
+		for _, p in ipairs(clone:GetDescendants()) do
+			if p:IsA("BasePart") then p.Anchored = true end
+		end
+
+		clone.Parent = WorldModel
+		charModel    = clone
+
+		-- Mover al origen con PivotTo
+		pcall(function()
+			local root = clone:FindFirstChild("HumanoidRootPart") or clone:FindFirstChild("Torso")
+			if root then clone:PivotTo(CFrame.new(0, 3.5, 0)) end
+		end)
+
+		-- Posicionar cámara frente al personaje
+		local hrp = clone:FindFirstChild("HumanoidRootPart") or clone:FindFirstChild("Torso")
+		if hrp then
+			local focus = hrp.Position + Vector3.new(0, 0.5, 0)
+			VPFCam.CFrame = CFrame.new(focus + Vector3.new(0, 0.5, 7), focus)
+		end
+
+		-- Asignar Highlight al clon
+		HL.Adornee = clone
+		HL.Parent  = clone  -- necesita estar dentro del WorldModel
+
+		-- Construir huesos del skeleton
+		buildBones(clone)
+	end
+
+	-- Carga inicial
+	task.spawn(function()
+		if LP and not LP.Character then LP.CharacterAdded:Wait() task.wait(0.5) end
+		loadChar()
+	end)
+
+	-- Recarga en respawn
+	if LP then
+		respawnConn = LP.CharacterAdded:Connect(function()
+			task.wait(1)
+			loadChar()
+		end)
+	end
+
+	-- ── Toggle abrir / cerrar ─────────────────────────────────────────────────
 	HdrBtn.MouseButton1Click:Connect(function()
 		isOpen = not isOpen
-
 		tws:Create(Outer, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Size = UDim2.new(1, 0, 0, isOpen and H_OPEN or H_HDR)
+			Size = UDim2.new(1,0,0, isOpen and H_OPEN or H_HDR)
 		}):Play()
-
-		Canvas.Visible  = isOpen
-		Legend.Visible  = isOpen
-		Arrow.Text      = isOpen and "▴" or "▾"
-
-		if self.Window then
-			AccentBar.BackgroundColor3 = self.Window.Accent
-		end
+		Canvas.Visible = isOpen
+		Arrow.Text     = isOpen and "▴" or "▾"
+		if self.Window then AccentBar.BackgroundColor3 = self.Window.Accent end
 	end)
 
-	HdrBtn.MouseEnter:Connect(function()
-		tws:Create(Hdr, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}):Play()
-	end)
-	HdrBtn.MouseLeave:Connect(function()
-		tws:Create(Hdr, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(14, 14, 14)}):Play()
-	end)
-
-	-- ── Loop de actualización (cada frame cuando está abierto) ──────────────
+	-- ── RenderStepped: actualiza todos los overlays en tiempo real ────────────
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
-		if not Outer.Parent then conn:Disconnect() return end
+		if not Outer.Parent then
+			conn:Disconnect()
+			if respawnConn then respawnConn:Disconnect() end
+			return
+		end
 		if not isOpen then return end
 
 		local S = _G.ESPSettings or {}
-		local P = _G.ESPHitboxPriority or {}
-		local t = tick()
 
-		-- ── Colores de segmentos por prioridad ──────────────────────────────
+		-- Si el personaje se destruyó, recargar
+		if LP and LP.Character and (not charModel or not charModel.Parent) then
+			task.spawn(loadChar)
+			return
+		end
+
+		-- ── Glow (Highlight 3D) ───────────────────────────────────────────────
 		local glowOn  = S.GlowEnabled == true
-		local glowCol = (typeof(S.GlowColor) == "Color3") and S.GlowColor or Color3.fromRGB(255,60,60)
+		local glowCol = (typeof(S.GlowColor)=="Color3") and S.GlowColor or Color3.fromRGB(255,60,60)
+		HL.Enabled          = glowOn
+		HL.FillColor        = glowCol
+		HL.OutlineColor     = glowCol
 
-		for key, sf in pairs(segFrames) do
-			local priority = P[key] or "Ignore"
-			local col      = PCOL[priority] or PCOL.Ignore
-			pcall(function()
-				sf.Frame.BackgroundColor3 = col
-				if glowOn then
-					-- Glow: stroke más grueso con el color de glow
-					sf.Stroke.Color      = glowCol
-					sf.Stroke.Thickness  = 3.5
-					sf.Frame.BackgroundTransparency = 0.15
-				else
-					sf.Stroke.Color      = col
-					sf.Stroke.Thickness  = 1.5
-					sf.Frame.BackgroundTransparency = 0.30
-				end
-			end)
-		end
-
-		-- ── Box ESP ──────────────────────────────────────────────────────────
+		-- ── Box ESP (overlay 2D) ──────────────────────────────────────────────
 		local boxOn  = S.BoxEnabled == true
-		local boxCol = (typeof(S.BoxColor) == "Color3") and S.BoxColor or Color3.fromRGB(255,255,255)
-		local tk     = math.clamp(S.BoxThickness or 1, 1, 5) * 0.0014
+		local boxCol = (typeof(S.BoxColor)=="Color3") and S.BoxColor or Color3.fromRGB(255,255,255)
+		local tk     = math.clamp((S.BoxThickness or 1), 1, 5) * 0.005
 		local boxTr  = boxOn and 0 or 1
-		pcall(function()
-			for _, l in ipairs({LT, LB, LL, LR}) do
-				l.BackgroundTransparency = boxTr
-				l.BackgroundColor3 = boxCol
-			end
-			LT.Size = UDim2.new(BW, 0, tk, 0)
-			LB.Size = UDim2.new(BW, 0, tk, 0)
-			LL.Size = UDim2.new(tk, 0, BH, 0)
-			LR.Size = UDim2.new(tk, 0, BH, 0)
-		end)
+		for _, l in ipairs({LT,LB,LL,LR}) do
+			l.BackgroundTransparency = boxTr
+			l.BackgroundColor3       = boxCol
+		end
+		LT.Size = UDim2.new(BW,0,tk,0)
+		LB.Size = UDim2.new(BW,0,tk,0)
+		LL.Size = UDim2.new(tk,0,BH,0)
+		LR.Size = UDim2.new(tk,0,BH,0)
 
-		-- ── Health Bar ───────────────────────────────────────────────────────
-		pcall(function()
-			HBbg.Visible   = S.HealthBarEnabled == true
-			HBfill.Visible = S.HealthBarEnabled == true
-		end)
-
-		-- ── Skeleton ─────────────────────────────────────────────────────────
-		local skelOn  = S.SkeletonEnabled == true
-		local skelCol = glowOn and glowCol or Color3.new(1,1,1)
-		for _, bl in ipairs(bones) do
-			pcall(function()
-				bl.Visible          = skelOn
-				bl.BackgroundColor3 = skelCol
-			end)
+		-- ── Skeleton (huesos 3D) ──────────────────────────────────────────────
+		local skelOn = S.SkeletonEnabled == true
+		if skelOn and charModel and charModel.Parent then
+			updateBones(glowOn and glowCol or Color3.new(1,1,1))
+		end
+		for _, b in ipairs(skeletonBones) do
+			b.Bone.Visible = skelOn
 		end
 
-		-- ── Labels Name / Distance ───────────────────────────────────────────
-		pcall(function()
-			NameLbl.Visible = S.NameEnabled == true
-			DistLbl.Visible = S.DistanceEnabled == true
-		end)
+		-- ── Health Bar (overlay 2D) ───────────────────────────────────────────
+		HBbg.Visible   = S.HealthBarEnabled == true
+		HBfill.Visible = S.HealthBarEnabled == true
 
-		-- ── Pulso en dots de leyenda ─────────────────────────────────────────
-		local pulse = 0.10 + math.abs(math.sin(t * 1.5)) * 0.25
-		for pName, dot in pairs(dots) do
-			local active = false
-			for _, v in pairs(P) do if v == pName then active = true break end end
-			pcall(function() dot.BackgroundTransparency = active and (pulse * 0.4) or 0.55 end)
+		-- ── Name / Distance (overlay 2D) ──────────────────────────────────────
+		NameLbl.Visible = S.NameEnabled == true
+		if S.NameEnabled and LP then
+			NameLbl.Text = "<b>"..LP.Name.."</b>"
 		end
+		DistLbl.Visible = S.DistanceEnabled == true
 	end)
 
+	-- Cleanup al destruirse
 	Outer.AncestryChanged:Connect(function()
-		if conn then conn:Disconnect() end
+		if conn       then conn:Disconnect()       end
+		if respawnConn then respawnConn:Disconnect() end
+		clearBones()
 	end)
 end
 
