@@ -2,9 +2,10 @@
 -- MAIN SCRIPT
 -- ============================================================================
 
-print("🔄 Cargando GUI...")
-
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/GUI_Core.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/ESP.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/Radar.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/SafeESP.lua"))()
 
 	local window = library:CreateWindow({})
 	--
