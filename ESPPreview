@@ -1,0 +1,404 @@
+-- ============================================================================
+-- ESPPreview.lua — Panel de preview del ESP en tiempo real
+-- Uso desde main.lua:
+--   local ESPPreview = loadstring(game:HttpGet("...ESPPreview.lua"))()
+--   ESPPreview:Create(visuals)
+-- ============================================================================
+
+local M = {}
+
+function M:Create(page)
+    local RunService = game:GetService("RunService")
+
+    -- Crear sección contenedora
+    local section = page:CreateSection({
+        Name   = "ESP Preview",
+        Size   = 318,
+        Side   = "Right"
+    })
+
+    local frame = section and section.MainFrame
+    if not frame then
+        warn("[ESPPreview] No se encontró MainFrame en la sección")
+        return
+    end
+
+    -- =========================================================
+    -- CANVAS
+    -- =========================================================
+    local canvas = Instance.new("Frame", frame)
+    canvas.Name                = "ESPPreviewCanvas"
+    canvas.BackgroundColor3    = Color3.fromRGB(8, 8, 10)
+    canvas.BorderSizePixel     = 0
+    canvas.Position            = UDim2.new(0, 6, 0, 20)
+    canvas.Size                = UDim2.new(1, -12, 0, 286)
+    canvas.ClipsDescendants    = true
+    canvas.ZIndex              = 4
+    Instance.new("UICorner", canvas).CornerRadius = UDim.new(0, 6)
+
+    -- Borde sutil
+    local border = Instance.new("UIStroke", canvas)
+    border.Color     = Color3.fromRGB(40, 40, 45)
+    border.Thickness = 1
+
+    -- =========================================================
+    -- UTILIDADES DE DIBUJO
+    -- =========================================================
+
+    -- Línea entre dos puntos usando Frame rotado
+    local function makeLine(x1, y1, x2, y2, color, thickness, parent)
+        local dx  = x2 - x1
+        local dy  = y2 - y1
+        local len = math.sqrt(dx * dx + dy * dy)
+        if len < 0.5 then return nil end
+        local f = Instance.new("Frame", parent or canvas)
+        f.BackgroundColor3 = color or Color3.fromRGB(255, 255, 255)
+        f.BorderSizePixel  = 0
+        f.AnchorPoint      = Vector2.new(0, 0.5)
+        f.Position         = UDim2.new(0, x1, 0, y1)
+        f.Size             = UDim2.new(0, math.ceil(len), 0, thickness or 1)
+        f.Rotation         = math.deg(math.atan2(dy, dx))
+        f.ZIndex           = 6
+        return f
+    end
+
+    -- Rectángulo sin relleno (4 lados)
+    local function makeRect(x1, y1, x2, y2, color, thickness)
+        local t = thickness or 1
+        local top   = makeLine(x1, y1, x2, y1, color, t)
+        local bot   = makeLine(x1, y2, x2, y2, color, t)
+        local left  = makeLine(x1, y1, x1, y2, color, t)
+        local right = makeLine(x2, y1, x2, y2, color, t)
+        return {top, bot, left, right}
+    end
+
+    -- Corner box (solo esquinas)
+    local function makeCornerRect(x1, y1, x2, y2, color, thickness)
+        local t   = thickness or 1
+        local cW  = math.floor((x2 - x1) * 0.22)
+        local cH  = math.floor((y2 - y1) * 0.22)
+        local segs = {
+            -- top-left
+            makeLine(x1,      y1, x1 + cW, y1,      color, t),
+            makeLine(x1,      y1, x1,      y1 + cH, color, t),
+            -- top-right
+            makeLine(x2 - cW, y1, x2,      y1,      color, t),
+            makeLine(x2,      y1, x2,      y1 + cH, color, t),
+            -- bot-left
+            makeLine(x1,      y2, x1 + cW, y2,      color, t),
+            makeLine(x1,      y2 - cH, x1, y2,      color, t),
+            -- bot-right
+            makeLine(x2 - cW, y2, x2,      y2,      color, t),
+            makeLine(x2,      y2 - cH, x2, y2,      color, t),
+        }
+        return segs
+    end
+
+    -- =========================================================
+    -- POSICIONES DE REFERENCIA
+    -- =========================================================
+    local CX = 90          -- centro horizontal del canvas
+
+    -- Bounding box del personaje
+    local BX1, BY1 = 34,  22
+    local BX2, BY2 = 146, 258
+
+    -- Nodos del esqueleto
+    local N = {
+        head      = { CX,      36  },
+        neck      = { CX,      58  },
+        chest     = { CX,      72  },
+        waist     = { CX,     130  },
+        lshoulder = { CX - 28, 78  },
+        rshoulder = { CX + 28, 78  },
+        lelbow    = { CX - 40, 114 },
+        relbow    = { CX + 40, 114 },
+        lwrist    = { CX - 44, 144 },
+        rwrist    = { CX + 44, 144 },
+        lhip      = { CX - 22, 146 },
+        rhip      = { CX + 22, 146 },
+        lknee     = { CX - 26, 196 },
+        rknee     = { CX + 26, 196 },
+        lfoot     = { CX - 29, 240 },
+        rfoot     = { CX + 29, 240 },
+    }
+
+    -- Conexiones de huesos
+    local BONE_PAIRS = {
+        { N.neck,      N.head      },
+        { N.neck,      N.chest     },
+        { N.chest,     N.waist     },
+        { N.chest,     N.lshoulder },
+        { N.lshoulder, N.lelbow    },
+        { N.lelbow,    N.lwrist    },
+        { N.chest,     N.rshoulder },
+        { N.rshoulder, N.relbow    },
+        { N.relbow,    N.rwrist    },
+        { N.waist,     N.lhip      },
+        { N.waist,     N.rhip      },
+        { N.lhip,      N.lknee     },
+        { N.lknee,     N.lfoot     },
+        { N.rhip,      N.rknee     },
+        { N.rknee,     N.rfoot     },
+    }
+
+    -- =========================================================
+    -- CREAR ELEMENTOS DEL PREVIEW
+    -- =========================================================
+
+    -- == BOX NORMAL ==
+    local boxNormal = makeRect(BX1, BY1, BX2, BY2, Color3.fromRGB(255,255,255), 1)
+
+    -- == BOX CORNER ==
+    local boxCorner = makeCornerRect(BX1, BY1, BX2, BY2, Color3.fromRGB(255,255,255), 1)
+
+    -- == BOX FILL ==
+    local boxFill = Instance.new("Frame", canvas)
+    boxFill.Name               = "BoxFill"
+    boxFill.BackgroundColor3   = Color3.fromRGB(255, 60, 60)
+    boxFill.BackgroundTransparency = 0.7
+    boxFill.BorderSizePixel    = 0
+    boxFill.Position           = UDim2.new(0, BX1, 0, BY1)
+    boxFill.Size               = UDim2.new(0, BX2 - BX1, 0, BY2 - BY1)
+    boxFill.ZIndex             = 5
+
+    -- == HEALTH BAR ==
+    local HBX      = BX1 - 6
+    local HBHeight = BY2 - BY1        -- 236px total
+
+    local hbBg = Instance.new("Frame", canvas)
+    hbBg.Name               = "HealthBarBg"
+    hbBg.BackgroundColor3   = Color3.fromRGB(20, 20, 20)
+    hbBg.BorderSizePixel    = 0
+    hbBg.Position           = UDim2.new(0, HBX, 0, BY1)
+    hbBg.Size               = UDim2.new(0, 3, 0, HBHeight)
+    hbBg.ZIndex             = 5
+
+    local hbFill = Instance.new("Frame", hbBg)
+    hbFill.Name             = "HealthBarFill"
+    hbFill.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+    hbFill.BorderSizePixel  = 0
+    hbFill.AnchorPoint      = Vector2.new(0, 1)
+    hbFill.Position         = UDim2.new(0, 0, 1, 0)
+    hbFill.Size             = UDim2.new(1, 0, 0.75, 0)   -- 75% HP de ejemplo
+    hbFill.ZIndex           = 6
+
+    -- == NAME ==
+    local nameLabel = Instance.new("TextLabel", canvas)
+    nameLabel.Name               = "ESPName"
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
+    nameLabel.Font               = Enum.Font.Code
+    nameLabel.TextSize           = 11
+    nameLabel.Text               = "Player"
+    nameLabel.TextXAlignment     = Enum.TextXAlignment.Center
+    nameLabel.AnchorPoint        = Vector2.new(0.5, 1)
+    nameLabel.Position           = UDim2.new(0, CX, 0, BY1 - 1)
+    nameLabel.Size               = UDim2.new(0, 120, 0, 13)
+    nameLabel.ZIndex             = 8
+
+    -- == DISTANCE ==
+    local distLabel = Instance.new("TextLabel", canvas)
+    distLabel.Name               = "ESPDist"
+    distLabel.BackgroundTransparency = 1
+    distLabel.TextColor3         = Color3.fromRGB(200, 200, 200)
+    distLabel.Font               = Enum.Font.Code
+    distLabel.TextSize           = 10
+    distLabel.Text               = "42m"
+    distLabel.TextXAlignment     = Enum.TextXAlignment.Center
+    distLabel.AnchorPoint        = Vector2.new(0.5, 0)
+    distLabel.Position           = UDim2.new(0, CX, 0, BY2 + 2)
+    distLabel.Size               = UDim2.new(0, 80, 0, 12)
+    distLabel.ZIndex             = 8
+
+    -- == TRACER ==
+    local tracerLine = makeLine(CX, BY2, CX, 286, Color3.fromRGB(255, 255, 255), 1)
+
+    -- == SKELETON ==
+    local headBox = Instance.new("Frame", canvas)
+    headBox.Name              = "HeadBox"
+    headBox.BackgroundTransparency = 1
+    headBox.BorderColor3      = Color3.fromRGB(255, 255, 255)
+    headBox.BorderSizePixel   = 1
+    headBox.AnchorPoint       = Vector2.new(0.5, 0.5)
+    headBox.Position          = UDim2.new(0, N.head[1], 0, N.head[2])
+    headBox.Size              = UDim2.new(0, 20, 0, 20)
+    headBox.ZIndex            = 7
+
+    local boneFrames = {}
+    for _, pair in ipairs(BONE_PAIRS) do
+        local f = makeLine(pair[1][1], pair[1][2], pair[2][1], pair[2][2],
+                           Color3.fromRGB(255, 255, 255), 1)
+        if f then table.insert(boneFrames, f) end
+    end
+
+    -- == GLOW (fill semitransparente de color) ==
+    local glowFill = Instance.new("Frame", canvas)
+    glowFill.Name               = "GlowFill"
+    glowFill.BackgroundColor3   = Color3.fromRGB(0, 255, 0)
+    glowFill.BackgroundTransparency = 0.65
+    glowFill.BorderSizePixel    = 0
+    glowFill.Position           = UDim2.new(0, BX1, 0, BY1)
+    glowFill.Size               = UDim2.new(0, BX2 - BX1, 0, BY2 - BY1)
+    glowFill.ZIndex             = 4
+
+    -- =========================================================
+    -- FUNCIÓN DE ACTUALIZACIÓN
+    -- =========================================================
+    local lastSettings = {}
+
+    local function setVisible(list, v)
+        for _, f in ipairs(list) do
+            if f then f.Visible = v end
+        end
+    end
+
+    local function update()
+        local esp = _G.ESPSettings
+        if not esp then return end
+
+        -- Evitar actualizaciones innecesarias comparando cambios
+        local changed = (
+            lastSettings.BoxEnabled        ~= esp.BoxEnabled        or
+            lastSettings.BoxType           ~= esp.BoxType           or
+            lastSettings.BoxColor          ~= esp.BoxColor          or
+            lastSettings.BoxThickness      ~= esp.BoxThickness      or
+            lastSettings.BoxFillEnabled    ~= esp.BoxFillEnabled    or
+            lastSettings.BoxFillColor      ~= esp.BoxFillColor      or
+            lastSettings.HealthBarEnabled  ~= esp.HealthBarEnabled  or
+            lastSettings.SkeletonEnabled   ~= esp.SkeletonEnabled   or
+            lastSettings.SkeletonColor     ~= esp.SkeletonColor     or
+            lastSettings.NameEnabled       ~= esp.NameEnabled       or
+            lastSettings.NameColor         ~= esp.NameColor         or
+            lastSettings.DistanceEnabled   ~= esp.DistanceEnabled   or
+            lastSettings.DistanceColor     ~= esp.DistanceColor     or
+            lastSettings.TracersEnabled    ~= esp.TracersEnabled    or
+            lastSettings.TracersColor      ~= esp.TracersColor      or
+            lastSettings.GlowEnabled       ~= esp.GlowEnabled       or
+            lastSettings.GlowColor         ~= esp.GlowColor
+        )
+        if not changed then return end
+
+        -- Snapshot
+        for k, v in pairs(esp) do lastSettings[k] = v end
+
+        -- ---- BOX ----
+        local boxOn    = esp.BoxEnabled or false
+        local boxColor = esp.BoxColor or Color3.fromRGB(255, 255, 255)
+        local boxThick = math.clamp(esp.BoxThickness or 1, 1, 3)
+        local isCorner = (esp.BoxType == "Corner")
+
+        setVisible(boxNormal, boxOn and not isCorner)
+        setVisible(boxCorner, boxOn and isCorner)
+
+        if boxOn then
+            local list = isCorner and boxCorner or boxNormal
+            for _, f in ipairs(list) do
+                if f then
+                    f.BackgroundColor3 = boxColor
+                    f.Size = UDim2.new(0, f.Size.X.Offset, 0, boxThick)
+                end
+            end
+        end
+
+        -- ---- BOX FILL ----
+        boxFill.Visible = (esp.BoxFillEnabled or false)
+        if esp.BoxFillEnabled then
+            boxFill.BackgroundColor3   = esp.BoxFillColor or Color3.fromRGB(255, 60, 60)
+            boxFill.BackgroundTransparency = esp.BoxFillTransparency or 0.7
+        end
+
+        -- ---- HEALTH BAR ----
+        hbBg.Visible   = esp.HealthBarEnabled or false
+        hbFill.Visible = esp.HealthBarEnabled or false
+
+        -- ---- SKELETON ----
+        local skelOn    = esp.SkeletonEnabled or false
+        local skelColor = esp.SkeletonColor or Color3.fromRGB(255, 255, 255)
+        headBox.Visible = skelOn
+        headBox.BorderColor3 = skelColor
+        for _, f in ipairs(boneFrames) do
+            if f then
+                f.Visible          = skelOn
+                f.BackgroundColor3 = skelColor
+            end
+        end
+
+        -- ---- NAME ----
+        nameLabel.Visible    = esp.NameEnabled or false
+        nameLabel.TextColor3 = esp.NameColor or Color3.fromRGB(255, 255, 255)
+
+        -- ---- DISTANCE ----
+        distLabel.Visible    = esp.DistanceEnabled or false
+        distLabel.TextColor3 = esp.DistanceColor or Color3.fromRGB(200, 200, 200)
+
+        -- ---- TRACERS ----
+        if tracerLine then
+            tracerLine.Visible = esp.TracersEnabled or false
+            if esp.TracersEnabled then
+                tracerLine.BackgroundColor3 = esp.TracersColor or Color3.fromRGB(255, 255, 255)
+            end
+        end
+
+        -- ---- GLOW ----
+        glowFill.Visible = esp.GlowEnabled or false
+        if esp.GlowEnabled then
+            glowFill.BackgroundColor3       = esp.GlowColor or Color3.fromRGB(0, 255, 0)
+            glowFill.BackgroundTransparency = esp.GlowTransparency or 0.65
+        end
+    end
+
+    -- Etiqueta de estado "sin ESP activo"
+    local emptyHint = Instance.new("TextLabel", canvas)
+    emptyHint.Name                  = "EmptyHint"
+    emptyHint.BackgroundTransparency = 1
+    emptyHint.TextColor3            = Color3.fromRGB(80, 80, 90)
+    emptyHint.Font                  = Enum.Font.Code
+    emptyHint.TextSize              = 10
+    emptyHint.Text                  = "Activa opciones para ver el preview"
+    emptyHint.TextXAlignment        = Enum.TextXAlignment.Center
+    emptyHint.AnchorPoint           = Vector2.new(0.5, 1)
+    emptyHint.Position              = UDim2.new(0.5, 0, 1, -4)
+    emptyHint.Size                  = UDim2.new(1, 0, 0, 12)
+    emptyHint.ZIndex                = 9
+
+    -- Silhouette base del personaje (muy tenue, siempre visible)
+    local silhouette = Instance.new("ImageLabel", canvas)
+    silhouette.Name                 = "Silhouette"
+    silhouette.BackgroundTransparency = 1
+    silhouette.ImageColor3          = Color3.fromRGB(30, 30, 35)
+    silhouette.AnchorPoint          = Vector2.new(0.5, 0)
+    silhouette.Position             = UDim2.new(0, CX, 0, BY1)
+    silhouette.Size                 = UDim2.new(0, BX2 - BX1, 0, BY2 - BY1)
+    silhouette.ZIndex               = 3
+    -- Usa un asset genérico de Roblox (humanoid silhouette placeholder)
+    -- Puedes reemplazarlo con tu propio asset
+    silhouette.Image                = "rbxassetid://0"
+
+    -- Estado "ningún ESP activo" tracking
+    local function anyActive(esp)
+        return esp.BoxEnabled or esp.SkeletonEnabled or esp.NameEnabled
+            or esp.DistanceEnabled or esp.HealthBarEnabled or esp.TracersEnabled
+            or esp.GlowEnabled or esp.BoxFillEnabled
+    end
+
+    -- Heartbeat: poll cada ~6 frames (suficiente para preview)
+    local tick2 = 0
+    RunService.Heartbeat:Connect(function(dt)
+        tick2 = tick2 + dt
+        if tick2 < 0.1 then return end
+        tick2 = 0
+        pcall(function()
+            update()
+            local esp = _G.ESPSettings
+            if esp then
+                emptyHint.Visible = not anyActive(esp)
+            end
+        end)
+    end)
+
+    -- Primera actualización inmediata
+    pcall(update)
+end
+
+return M
