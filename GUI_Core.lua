@@ -4715,5 +4715,560 @@ end
 		end
 	end
 
+    -- ============================================================================
+-- INSERTAR ESTE BLOQUE EN GUI_CORE.lua
+-- POSICIÓN: justo ANTES de la línea `return library`
+-- (después del cierre `end` del bloque `do -- // Content`)
+-- ============================================================================
+
+-- ============================================================================
+-- sections:CreateESPPreview
+-- Elemento colapsable integrado en cualquier sección.
+-- Se usa igual que CreateToggle / CreateSlider:
+--
+--   espSection:CreateESPPreview({
+--       Name = "ESP Preview"   -- opcional, por defecto "ESP Preview"
+--   })
+--
+-- Lee en tiempo real:
+--   _G.ESPSettings  (BoxEnabled, BoxColor, BoxThickness, HealthBarEnabled,
+--                    SkeletonEnabled, NameEnabled, DistanceEnabled, GlowColor)
+--   _G.ESPHitboxPriority  (Head, Torso, LeftArm, RightArm, LeftLeg, RightLeg)
+-- ============================================================================
+
+function sections:CreateESPPreview(Properties)
+    Properties = Properties or {}
+
+    -- ── defaults globales por si el ESP todavía no cargó ─────────────────────
+    _G.ESPSettings = _G.ESPSettings or {
+        BoxEnabled        = false,
+        BoxColor          = Color3.fromRGB(255, 255, 255),
+        BoxThickness      = 1,
+        HealthBarEnabled  = false,
+        SkeletonEnabled   = false,
+        NameEnabled       = false,
+        DistanceEnabled   = false,
+        GlowColor         = Color3.fromRGB(255, 60, 60),
+    }
+    _G.ESPHitboxPriority = _G.ESPHitboxPriority or {
+        Head     = "First",
+        Torso    = "Second",
+        LeftArm  = "Third",
+        RightArm = "Third",
+        LeftLeg  = "Fourth",
+        RightLeg = "Fourth",
+    }
+
+    -- ── colores de prioridad ──────────────────────────────────────────────────
+    local PCOL = {
+        First  = Color3.fromRGB(255,  75,  75),
+        Second = Color3.fromRGB( 75, 235, 175),
+        Third  = Color3.fromRGB(255, 195,  55),
+        Fourth = Color3.fromRGB( 75, 135, 255),
+        Ignore = Color3.fromRGB(140, 140, 145),
+    }
+
+    -- ── tamaños ───────────────────────────────────────────────────────────────
+    local HEADER_H    = 18    -- altura del header colapsado
+    local CANVAS_W    = 220   -- px fijos del canvas (ajustar si la sección es más ancha)
+    local CANVAS_H    = 210   -- px del canvas de personaje
+    local LEGEND_H    = 58    -- px de la leyenda
+    local PADDING     = 6     -- margen interno
+    local EXPANDED_H  = HEADER_H + PADDING + CANVAS_H + PADDING + LEGEND_H + PADDING
+    local isOpen      = false
+
+    -- ── parent correcto (subtab o holder directo) ─────────────────────────────
+    local parentContainer = self:GetCurrentSubtabContainer()
+
+    -- ════════════════════════════════════════════════════════════════════════
+    -- OUTER HOLDER — controla el alto colapsado / expandido
+    -- ════════════════════════════════════════════════════════════════════════
+    local Outer = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = parentContainer,
+        Size                = UDim2.new(1, 0, 0, HEADER_H),
+        ZIndex              = 3,
+        ClipsDescendants    = true,
+    })
+
+    -- ── Header row ───────────────────────────────────────────────────────────
+    local HeaderBG = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(14, 14, 14),
+        BackgroundTransparency = 0,
+        BorderSizePixel     = 0,
+        Parent              = Outer,
+        Position            = UDim2.new(0, 20, 0, 4),
+        Size                = UDim2.new(1, -40, 0, 12),
+        ZIndex              = 4,
+    })
+
+    local HeaderTitle = utility:RenderObject("TextLabel", {
+        AnchorPoint         = Vector2.new(0, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = HeaderBG,
+        Position            = UDim2.new(0, 12, 0.5, 0),
+        Size                = UDim2.new(1, -30, 1, 0),
+        ZIndex              = 4,
+        Font                = "Code",
+        RichText            = true,
+        Text                = "<b>" .. (Properties.Name or Properties.name or "ESP Preview") .. "</b>",
+        TextColor3          = Color3.fromRGB(200, 200, 210),
+        TextSize            = 9,
+        TextXAlignment      = "Left",
+        TextStrokeTransparency = 1,
+    })
+
+    -- indicador coloreado izquierdo (acento)
+    local HeaderAccent = utility:RenderObject("Frame", {
+        BackgroundColor3    = self.Window and self.Window.Accent or Color3.fromRGB(0, 170, 255),
+        BackgroundTransparency = 0,
+        BorderSizePixel     = 0,
+        Parent              = HeaderBG,
+        Position            = UDim2.new(0, 2, 0.5, -4),
+        Size                = UDim2.new(0, 2, 0, 8),
+        ZIndex              = 5,
+    })
+
+    -- flecha ▾ / ▴
+    local HeaderArrow = utility:RenderObject("TextLabel", {
+        AnchorPoint         = Vector2.new(1, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = HeaderBG,
+        Position            = UDim2.new(1, -4, 0.5, 0),
+        Size                = UDim2.new(0, 14, 1, 0),
+        ZIndex              = 4,
+        Font                = "Code",
+        Text                = "▾",
+        TextColor3          = Color3.fromRGB(130, 130, 145),
+        TextSize            = 10,
+        TextXAlignment      = "Center",
+        TextStrokeTransparency = 1,
+    })
+
+    -- botón invisible sobre el header
+    local HeaderButton = utility:RenderObject("TextButton", {
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = Outer,
+        Size                = UDim2.new(1, 0, 0, HEADER_H),
+        Text                = "",
+        ZIndex              = 6,
+    })
+
+    -- ════════════════════════════════════════════════════════════════════════
+    -- CANVAS — área de previsualización del personaje
+    -- ════════════════════════════════════════════════════════════════════════
+    local CanvasBG = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(11, 11, 14),
+        BackgroundTransparency = 0,
+        BorderColor3        = Color3.fromRGB(40, 40, 50),
+        BorderSizePixel     = 1,
+        Parent              = Outer,
+        Position            = UDim2.new(0, 8, 0, HEADER_H + PADDING),
+        Size                = UDim2.new(1, -16, 0, CANVAS_H),
+        ZIndex              = 3,
+        Visible             = false,
+    })
+
+    -- ── Silueta del personaje (6 segmentos como Frames) ──────────────────────
+    -- Coordenadas en escala relativa al CanvasBG
+    local segDefs = {
+        { key="Head",     x=0.40, y=0.04, w=0.20, h=0.14 },
+        { key="Torso",    x=0.34, y=0.19, w=0.32, h=0.24 },
+        { key="LeftArm",  x=0.18, y=0.19, w=0.14, h=0.22 },
+        { key="RightArm", x=0.68, y=0.19, w=0.14, h=0.22 },
+        { key="LeftLeg",  x=0.30, y=0.44, w=0.16, h=0.28 },
+        { key="RightLeg", x=0.54, y=0.44, w=0.16, h=0.28 },
+    }
+
+    local segFrames = {}
+
+    for _, def in ipairs(segDefs) do
+        local col = PCOL[ _G.ESPHitboxPriority[def.key] or "Ignore" ]
+
+        local seg = utility:RenderObject("Frame", {
+            BackgroundColor3    = col,
+            BackgroundTransparency = 0.30,
+            BorderSizePixel     = 0,
+            Parent              = CanvasBG,
+            Position            = UDim2.new(def.x, 0, def.y, 0),
+            Size                = UDim2.new(def.w, 0, def.h, 0),
+            ZIndex              = 5,
+        })
+
+        -- stroke colorido alrededor de cada segmento
+        local stroke = Instance.new("UIStroke")
+        stroke.Color       = col
+        stroke.Thickness   = 1.5
+        stroke.Transparency = 0
+        stroke.Parent      = seg
+
+        -- etiqueta mini dentro del segmento
+        local lbl = utility:RenderObject("TextLabel", {
+            BackgroundTransparency = 1,
+            BorderSizePixel        = 0,
+            Parent                 = seg,
+            Size                   = UDim2.new(1, 0, 1, 0),
+            ZIndex                 = 6,
+            Font                   = "Code",
+            Text                   = def.key:upper():sub(1, 3),
+            TextColor3             = Color3.fromRGB(255, 255, 255),
+            TextTransparency       = 0.35,
+            TextSize               = 7,
+            TextXAlignment         = "Center",
+            TextStrokeTransparency = 1,
+        })
+
+        segFrames[def.key] = { Frame = seg, Stroke = stroke }
+    end
+
+    -- ── Box ESP — 4 líneas ────────────────────────────────────────────────────
+    local BX1 = 0.14   -- x start escala
+    local BY1 = 0.03   -- y start escala
+    local BXW = 0.72   -- ancho  escala
+    local BYH = 0.79   -- alto   escala
+    local BT  = 0.005  -- grosor base (escala Y)
+
+    local function mkLine(xi, yi, wi, hi)
+        return utility:RenderObject("Frame", {
+            BackgroundColor3    = _G.ESPSettings.BoxColor or Color3.fromRGB(255,255,255),
+            BackgroundTransparency = 1,
+            BorderSizePixel     = 0,
+            Parent              = CanvasBG,
+            Position            = UDim2.new(xi, 0, yi, 0),
+            Size                = UDim2.new(wi, 0, hi, 0),
+            ZIndex              = 8,
+        })
+    end
+
+    local BoxT   = mkLine(BX1,        BY1,         BXW, BT)
+    local BoxB   = mkLine(BX1,        BY1 + BYH,   BXW, BT)
+    local BoxL   = mkLine(BX1,        BY1,         BT,  BYH)
+    local BoxR   = mkLine(BX1 + BXW,  BY1,         BT,  BYH)
+
+    -- ── Health Bar ────────────────────────────────────────────────────────────
+    local HBarBG = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(25, 25, 25),
+        BackgroundTransparency = 0.35,
+        BorderSizePixel     = 0,
+        Parent              = CanvasBG,
+        Position            = UDim2.new(0.08, 0, BY1, 0),
+        Size                = UDim2.new(0.04, 0, BYH, 0),
+        ZIndex              = 8,
+        Visible             = false,
+    })
+    local HBarFill = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(80, 220, 80),
+        BackgroundTransparency = 0,
+        BorderSizePixel     = 0,
+        Parent              = HBarBG,
+        Position            = UDim2.new(0.1, 0, 0.18, 0),
+        Size                = UDim2.new(0.8, 0, 0.80, 0),
+        ZIndex              = 9,
+    })
+
+    -- ── Skeleton — articulaciones y huesos ────────────────────────────────────
+    -- Puntos en escala del CanvasBG (x, y)
+    local J = {
+        Head      = Vector2.new(0.500, 0.105),
+        Neck      = Vector2.new(0.500, 0.195),
+        Torso     = Vector2.new(0.500, 0.305),
+        Hip       = Vector2.new(0.500, 0.435),
+        LShould   = Vector2.new(0.345, 0.215),
+        RShould   = Vector2.new(0.655, 0.215),
+        LElbow    = Vector2.new(0.265, 0.310),
+        RElbow    = Vector2.new(0.735, 0.310),
+        LWrist    = Vector2.new(0.240, 0.400),
+        RWrist    = Vector2.new(0.760, 0.400),
+        LKnee     = Vector2.new(0.395, 0.575),
+        RKnee     = Vector2.new(0.605, 0.575),
+        LFoot     = Vector2.new(0.385, 0.720),
+        RFoot     = Vector2.new(0.615, 0.720),
+    }
+
+    local BONE_PAIRS = {
+        {"Head","Neck"},  {"Neck","Torso"},  {"Torso","Hip"},
+        {"Neck","LShould"},  {"Neck","RShould"},
+        {"LShould","LElbow"},{"RShould","RElbow"},
+        {"LElbow","LWrist"}, {"RElbow","RWrist"},
+        {"Hip","LKnee"},     {"Hip","RKnee"},
+        {"LKnee","LFoot"},   {"RKnee","RFoot"},
+    }
+
+    -- Pixel size asumido del canvas para calcular ángulo y longitud de línea
+    local CW_PX, CH_PX = 200, 210
+
+    local boneLines = {}
+
+    for _, bp in ipairs(BONE_PAIRS) do
+        local p1 = J[bp[1]]
+        local p2 = J[bp[2]]
+        if p1 and p2 then
+            local cx  = (p1.X + p2.X) / 2
+            local cy  = (p1.Y + p2.Y) / 2
+            local dx  = (p2.X - p1.X) * CW_PX
+            local dy  = (p2.Y - p1.Y) * CH_PX
+            local len = math.sqrt(dx*dx + dy*dy)
+            local ang = math.deg(math.atan2(dy, dx))
+
+            local line = utility:RenderObject("Frame", {
+                AnchorPoint         = Vector2.new(0.5, 0.5),
+                BackgroundColor3    = Color3.fromRGB(255, 255, 255),
+                BackgroundTransparency = 0.25,
+                BorderSizePixel     = 0,
+                Parent              = CanvasBG,
+                Position            = UDim2.new(cx, 0, cy, 0),
+                Size                = UDim2.new(0, len, 0, 1.5),
+                Rotation            = ang,
+                ZIndex              = 7,
+                Visible             = false,
+            })
+            table.insert(boneLines, line)
+        end
+    end
+
+    -- ── Name + Distance labels ────────────────────────────────────────────────
+    local NameLbl = utility:RenderObject("TextLabel", {
+        AnchorPoint         = Vector2.new(0.5, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = CanvasBG,
+        Position            = UDim2.new(0.5, 0, 0, -1),
+        Size                = UDim2.new(0.8, 0, 0, 12),
+        ZIndex              = 9,
+        Font                = "Code",
+        RichText            = true,
+        Text                = "<b>Player_001</b>",
+        TextColor3          = Color3.fromRGB(255, 255, 255),
+        TextSize            = 9,
+        TextXAlignment      = "Center",
+        TextStrokeTransparency = 1,
+        Visible             = false,
+    })
+
+    local DistLbl = utility:RenderObject("TextLabel", {
+        AnchorPoint         = Vector2.new(0.5, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel     = 0,
+        Parent              = CanvasBG,
+        Position            = UDim2.new(0.5, 0, 1, 2),
+        Size                = UDim2.new(0.8, 0, 0, 11),
+        ZIndex              = 9,
+        Font                = "Code",
+        Text                = "[ 87m ]",
+        TextColor3          = Color3.fromRGB(155, 155, 175),
+        TextSize            = 8,
+        TextXAlignment      = "Center",
+        TextStrokeTransparency = 1,
+        Visible             = false,
+    })
+
+    -- ── Glow / Chams ring (visible cuando GlowColor o ChamsEnabled) ───────────
+    local GlowRing = utility:RenderObject("Frame", {
+        AnchorPoint         = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        BorderColor3        = Color3.fromRGB(255, 60, 60),
+        BorderSizePixel     = 3,
+        Parent              = CanvasBG,
+        Position            = UDim2.new(0.5, 0, 0.46, 0),
+        Size                = UDim2.new(0.72, 0, 0.82, 0),
+        ZIndex              = 4,
+        Visible             = false,
+    })
+
+    -- ════════════════════════════════════════════════════════════════════════
+    -- LEYENDA — debajo del canvas
+    -- ════════════════════════════════════════════════════════════════════════
+    local LegendBG = utility:RenderObject("Frame", {
+        BackgroundColor3    = Color3.fromRGB(14, 14, 17),
+        BackgroundTransparency = 0,
+        BorderColor3        = Color3.fromRGB(40, 40, 50),
+        BorderSizePixel     = 1,
+        Parent              = Outer,
+        Position            = UDim2.new(0, 8, 0, HEADER_H + PADDING + CANVAS_H + PADDING),
+        Size                = UDim2.new(1, -16, 0, LEGEND_H),
+        ZIndex              = 3,
+        Visible             = false,
+    })
+
+    local legendItems = {
+        { name="First",  col=PCOL.First  },
+        { name="Second", col=PCOL.Second },
+        { name="Third",  col=PCOL.Third  },
+        { name="Fourth", col=PCOL.Fourth },
+        { name="Ignore", col=PCOL.Ignore },
+    }
+
+    local legendDots = {}
+
+    for i, item in ipairs(legendItems) do
+        local col = math.floor((i-1) % 3)   -- 0,1,2 columnas
+        local row = math.floor((i-1) / 3)   -- 0,1 filas
+        local xBase = 0.05 + col * 0.335
+        local yBase = 0.15 + row * 0.50
+
+        local dot = utility:RenderObject("Frame", {
+            AnchorPoint         = Vector2.new(0, 0.5),
+            BackgroundColor3    = item.col,
+            BackgroundTransparency = 0,
+            BorderSizePixel     = 0,
+            Parent              = LegendBG,
+            Position            = UDim2.new(xBase, 0, yBase + 0.10, 0),
+            Size                = UDim2.new(0, 8, 0, 8),
+            ZIndex              = 5,
+        })
+        -- hacerlo circular
+        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+        utility:RenderObject("TextLabel", {
+            BackgroundTransparency = 1,
+            BorderSizePixel        = 0,
+            Parent                 = LegendBG,
+            Position               = UDim2.new(xBase + 0.02, 11, yBase, 0),
+            Size                   = UDim2.new(0.30, 0, 0.38, 0),
+            ZIndex                 = 5,
+            Font                   = "Code",
+            Text                   = item.name,
+            TextColor3             = Color3.fromRGB(190, 190, 205),
+            TextSize               = 8,
+            TextXAlignment         = "Left",
+            TextStrokeTransparency = 1,
+        })
+
+        legendDots[item.name] = dot
+    end
+
+    -- ════════════════════════════════════════════════════════════════════════
+    -- TOGGLE COLAPSAR / EXPANDIR
+    -- ════════════════════════════════════════════════════════════════════════
+    utility:CreateConnection(HeaderButton.MouseButton1Click, function()
+        isOpen = not isOpen
+
+        tws:Create(Outer, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(1, 0, 0, isOpen and EXPANDED_H or HEADER_H)
+        }):Play()
+
+        CanvasBG.Visible   = isOpen
+        LegendBG.Visible   = isOpen
+        HeaderArrow.Text   = isOpen and "▴" or "▾"
+
+        -- sincronizar acento con el tema activo
+        if self.Window then
+            HeaderAccent.BackgroundColor3 = self.Window.Accent
+        end
+    end)
+
+    -- hover del header
+    utility:CreateConnection(HeaderButton.MouseEnter, function()
+        tws:Create(HeaderBG, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}):Play()
+    end)
+    utility:CreateConnection(HeaderButton.MouseLeave, function()
+        tws:Create(HeaderBG, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(14, 14, 14)}):Play()
+    end)
+
+    -- ════════════════════════════════════════════════════════════════════════
+    -- LOOP DE ACTUALIZACIÓN EN TIEMPO REAL (RenderStepped)
+    -- ════════════════════════════════════════════════════════════════════════
+    local rsConn
+    rsConn = RunService.RenderStepped:Connect(function()
+        -- salir si el frame fue destruido
+        if not Outer or not Outer.Parent then
+            rsConn:Disconnect()
+            return
+        end
+        -- solo actualizar cuando el preview está abierto (optimización)
+        if not isOpen then return end
+
+        local S = _G.ESPSettings or {}
+        local P = _G.ESPHitboxPriority or {}
+
+        -- ── 1. Colores de segmentos según prioridad ───────────────────────
+        for key, sf in pairs(segFrames) do
+            local prio = P[key] or "Ignore"
+            local col  = PCOL[prio] or PCOL.Ignore
+            pcall(function()
+                sf.Frame.BackgroundColor3 = col
+                sf.Stroke.Color           = col
+            end)
+        end
+
+        -- ── 2. Box ESP ────────────────────────────────────────────────────
+        local boxOn   = S.BoxEnabled == true
+        local boxCol  = (typeof(S.BoxColor) == "Color3") and S.BoxColor or Color3.fromRGB(255,255,255)
+        local boxTr   = boxOn and 0 or 1
+        local thick   = math.clamp(S.BoxThickness or 1, 1, 5)
+        local tScale  = thick * 0.0015   -- grosor en escala Y del canvas
+
+        pcall(function()
+            BoxT.BackgroundTransparency = boxTr
+            BoxB.BackgroundTransparency = boxTr
+            BoxL.BackgroundTransparency = boxTr
+            BoxR.BackgroundTransparency = boxTr
+
+            BoxT.BackgroundColor3 = boxCol
+            BoxB.BackgroundColor3 = boxCol
+            BoxL.BackgroundColor3 = boxCol
+            BoxR.BackgroundColor3 = boxCol
+
+            BoxT.Size = UDim2.new(BXW, 0, tScale, 0)
+            BoxB.Size = UDim2.new(BXW, 0, tScale, 0)
+            BoxL.Size = UDim2.new(tScale, 0, BYH, 0)
+            BoxR.Size = UDim2.new(tScale, 0, BYH, 0)
+        end)
+
+        -- ── 3. Health Bar ─────────────────────────────────────────────────
+        local hbOn = S.HealthBarEnabled == true
+        pcall(function()
+            HBarBG.Visible = hbOn
+            HBarFill.Visible = hbOn
+        end)
+
+        -- ── 4. Skeleton ───────────────────────────────────────────────────
+        local skelOn = S.SkeletonEnabled == true
+        for _, bl in ipairs(boneLines) do
+            pcall(function() bl.Visible = skelOn end)
+        end
+
+        -- ── 5. Nombre / Distancia ─────────────────────────────────────────
+        pcall(function()
+            NameLbl.Visible = S.NameEnabled == true
+            DistLbl.Visible = S.DistanceEnabled == true
+        end)
+
+        -- ── 6. Glow / Chams ───────────────────────────────────────────────
+        local glowOn  = (S.ChamsEnabled == true) or (S.GlowEnabled == true)
+        local glowCol = (typeof(S.GlowColor) == "Color3") and S.GlowColor or Color3.fromRGB(255, 60, 60)
+        pcall(function()
+            GlowRing.Visible      = glowOn
+            GlowRing.BorderColor3 = glowCol
+        end)
+
+        -- ── 7. Pulso animado en los dots de leyenda ───────────────────────
+        local pulse = 0.15 + math.abs(math.sin(tick() * 1.6)) * 0.30
+        for pName, dot in pairs(legendDots) do
+            pcall(function()
+                local active = false
+                for _, v in pairs(P) do
+                    if v == pName then active = true; break end
+                end
+                dot.BackgroundTransparency = active and (pulse * 0.5) or 0.60
+            end)
+        end
+    end)
+
+    -- liberar conexión si el Outer se destruye
+    Outer.AncestryChanged:Connect(function()
+        if rsConn then rsConn:Disconnect() end
+    end)
+end
+
+-- ============================================================================
+-- FIN DEL BLOQUE — la línea siguiente debe ser: return library
+-- ============================================================================
+
 
 return library  -- ✅ Retornar la tabla
