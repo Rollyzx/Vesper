@@ -4737,48 +4737,53 @@ end
 function sections:CreateESPPreview(Properties)
 	Properties = Properties or {}
 
-	-- Defaults globales (si el ESP aún no cargó)
+	-- ── Defaults globales de ESPSettings ─────────────────────────────────────
 	if not _G.ESPSettings then
 		_G.ESPSettings = {
-			BoxEnabled = false, BoxColor = Color3.fromRGB(255,255,255), BoxThickness = 1,
-			HealthBarEnabled = false, SkeletonEnabled = false,
-			NameEnabled = false, DistanceEnabled = false,
-			GlowEnabled = false, GlowColor = Color3.fromRGB(255,60,60),
+			BoxEnabled      = false, BoxColor     = Color3.fromRGB(255,255,255), BoxThickness = 1,
+			HealthBarEnabled= false,
+			SkeletonEnabled = false,
+			NameEnabled     = false,
+			DistanceEnabled = false,
+			GlowEnabled     = false, GlowColor    = Color3.fromRGB(255,60,60),
 		}
 	end
 	if not _G.ESPHitboxPriority then
 		_G.ESPHitboxPriority = {
-			Head = "First", Torso = "Second",
-			LeftArm = "Third", RightArm = "Third",
-			LeftLeg = "Fourth", RightLeg = "Fourth",
+			Head="First", Torso="Second",
+			LeftArm="Third", RightArm="Third",
+			LeftLeg="Fourth", RightLeg="Fourth",
 		}
 	end
 
-	-- Colores por prioridad
+	-- ── Colores por prioridad de hitbox ───────────────────────────────────────
 	local PCOL = {
-		First  = Color3.fromRGB(255, 75, 75),
-		Second = Color3.fromRGB(75, 235, 175),
+		First  = Color3.fromRGB(255, 75,  75),
+		Second = Color3.fromRGB(75,  235, 175),
 		Third  = Color3.fromRGB(255, 195, 55),
-		Fourth = Color3.fromRGB(75, 135, 255),
+		Fourth = Color3.fromRGB(75,  135, 255),
 		Ignore = Color3.fromRGB(140, 140, 145),
 	}
 
-	-- Alturas
+	-- ── Medidas del widget ────────────────────────────────────────────────────
 	local H_HDR    = 18
 	local H_CANVAS = 215
 	local H_LEGEND = 60
 	local H_PAD    = 5
 	local H_OPEN   = H_HDR + H_PAD + H_CANVAS + H_PAD + H_LEGEND + H_PAD
-	local isOpen   = false
+	local isOpen   = true   -- ← empieza EXPANDIDO para que el personaje sea visible
 
-	-- Parent correcto (respeta subtabs)
+	-- ── Parent correcto (respeta subtabs) ─────────────────────────────────────
 	local parent = self:GetCurrentSubtabContainer()
 
-	-- ── Contenedor raíz (se anima su alto) ──────────────────────────────────
+	-- Asegurarse de que exista el parent
+	if not parent then parent = self.Holder end
+
+	-- ── Contenedor raíz ──────────────────────────────────────────────────────
 	local Outer = Instance.new("Frame")
 	Outer.BackgroundTransparency = 1
 	Outer.BorderSizePixel = 0
-	Outer.Size   = UDim2.new(1, 0, 0, H_HDR)
+	Outer.Size   = UDim2.new(1, 0, 0, H_OPEN)   -- inicia expandido
 	Outer.ClipsDescendants = true
 	Outer.ZIndex = 3
 	Outer.Parent = parent
@@ -4826,7 +4831,7 @@ function sections:CreateESPPreview(Properties)
 	Arrow.Size         = UDim2.new(0, 12, 1, 0)
 	Arrow.ZIndex       = 5
 	Arrow.Font         = Enum.Font.Code
-	Arrow.Text         = "▾"
+	Arrow.Text         = "▴"   -- empieza abierto
 	Arrow.TextColor3   = Color3.fromRGB(120, 120, 135)
 	Arrow.TextSize     = 10
 	Arrow.TextXAlignment = Enum.TextXAlignment.Center
@@ -4849,7 +4854,7 @@ function sections:CreateESPPreview(Properties)
 	Canvas.Position = UDim2.new(0, 8, 0, H_HDR + H_PAD)
 	Canvas.Size     = UDim2.new(1, -16, 0, H_CANVAS)
 	Canvas.ZIndex   = 3
-	Canvas.Visible  = false
+	Canvas.Visible  = true   -- visible porque isOpen = true
 	Canvas.Parent   = Outer
 
 	-- ── Segmentos del personaje ──────────────────────────────────────────────
@@ -5026,7 +5031,7 @@ function sections:CreateESPPreview(Properties)
 	Legend.Position = UDim2.new(0, 8, 0, H_HDR + H_PAD + H_CANVAS + H_PAD)
 	Legend.Size     = UDim2.new(1, -16, 0, H_LEGEND)
 	Legend.ZIndex   = 3
-	Legend.Visible  = false
+	Legend.Visible  = true   -- visible porque isOpen = true
 	Legend.Parent   = Outer
 
 	local legendItems = {
@@ -5093,7 +5098,7 @@ function sections:CreateESPPreview(Properties)
 		tws:Create(Hdr, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(14, 14, 14)}):Play()
 	end)
 
-	-- ── Loop de actualización (solo cuando está abierto) ─────────────────────
+	-- ── Loop de actualización (cada frame cuando está abierto) ──────────────
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
 		if not Outer.Parent then conn:Disconnect() return end
@@ -5103,16 +5108,29 @@ function sections:CreateESPPreview(Properties)
 		local P = _G.ESPHitboxPriority or {}
 		local t = tick()
 
-		-- Segmentos
+		-- ── Colores de segmentos por prioridad ──────────────────────────────
+		local glowOn  = S.GlowEnabled == true
+		local glowCol = (typeof(S.GlowColor) == "Color3") and S.GlowColor or Color3.fromRGB(255,60,60)
+
 		for key, sf in pairs(segFrames) do
-			local col = PCOL[P[key] or "Ignore"] or PCOL.Ignore
+			local priority = P[key] or "Ignore"
+			local col      = PCOL[priority] or PCOL.Ignore
 			pcall(function()
 				sf.Frame.BackgroundColor3 = col
-				sf.Stroke.Color = col
+				if glowOn then
+					-- Glow: stroke más grueso con el color de glow
+					sf.Stroke.Color      = glowCol
+					sf.Stroke.Thickness  = 3.5
+					sf.Frame.BackgroundTransparency = 0.15
+				else
+					sf.Stroke.Color      = col
+					sf.Stroke.Thickness  = 1.5
+					sf.Frame.BackgroundTransparency = 0.30
+				end
 			end)
 		end
 
-		-- Box
+		-- ── Box ESP ──────────────────────────────────────────────────────────
 		local boxOn  = S.BoxEnabled == true
 		local boxCol = (typeof(S.BoxColor) == "Color3") and S.BoxColor or Color3.fromRGB(255,255,255)
 		local tk     = math.clamp(S.BoxThickness or 1, 1, 5) * 0.0014
@@ -5128,29 +5146,33 @@ function sections:CreateESPPreview(Properties)
 			LR.Size = UDim2.new(tk, 0, BH, 0)
 		end)
 
-		-- Health Bar
+		-- ── Health Bar ───────────────────────────────────────────────────────
 		pcall(function()
 			HBbg.Visible   = S.HealthBarEnabled == true
 			HBfill.Visible = S.HealthBarEnabled == true
 		end)
 
-		-- Skeleton
-		local skelOn = S.SkeletonEnabled == true
+		-- ── Skeleton ─────────────────────────────────────────────────────────
+		local skelOn  = S.SkeletonEnabled == true
+		local skelCol = glowOn and glowCol or Color3.new(1,1,1)
 		for _, bl in ipairs(bones) do
-			pcall(function() bl.Visible = skelOn end)
+			pcall(function()
+				bl.Visible          = skelOn
+				bl.BackgroundColor3 = skelCol
+			end)
 		end
 
-		-- Labels
+		-- ── Labels Name / Distance ───────────────────────────────────────────
 		pcall(function()
 			NameLbl.Visible = S.NameEnabled == true
 			DistLbl.Visible = S.DistanceEnabled == true
 		end)
 
-		-- Dots leyenda (pulso)
+		-- ── Pulso en dots de leyenda ─────────────────────────────────────────
 		local pulse = 0.10 + math.abs(math.sin(t * 1.5)) * 0.25
 		for pName, dot in pairs(dots) do
 			local active = false
-			for _, v in pairs(P) do if v == pName then active = true; break end end
+			for _, v in pairs(P) do if v == pName then active = true break end end
 			pcall(function() dot.BackgroundTransparency = active and (pulse * 0.4) or 0.55 end)
 		end
 	end)
