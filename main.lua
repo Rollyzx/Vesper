@@ -8,7 +8,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/Vesper/refs/h
 	local window = library:CreateWindow({})
 	--
 	local rage = window:CreatePage({Icon = "rbxassetid://8547236654"})
-	local antiaim = window:CreatePage({Icon = "rbxassetid://8547310764"})
+	local antiaim = window:CreatePage({Icon = "rbxassetid://76294864911373"})
 	local aimbot = window:CreatePage({Icon = "rbxassetid://8547249956"})
 	local visuals = window:CreatePage({Icon = "rbxassetid://8547254518"})
 	local setting = window:CreatePage({Icon = "rbxassetid://8547256547"})
