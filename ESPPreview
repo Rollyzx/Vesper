@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — Panel flotante con todas las mejoras (CORREGIDO)
+-- ESPPreview.lua — Panel flotante con todas las mejoras (FINAL CORREGIDO)
 -- Cargar DESPUÉS de ESP.lua
 -- ============================================================================
 
@@ -220,28 +220,28 @@ do
     box3D.CanCollide = false
     box3D.Material = Enum.Material.Neon
     box3D.Color = Color3.fromRGB(0,255,255)
-    box3D.Transparency = 1  -- oculto por defecto
+    box3D.Transparency = 1
     box3D.Size = Vector3.new(1,1,1)
 
-    -- Sombra (disco)
+    -- Sombra
     local shadowPart = Instance.new("Part", worldModel)
     shadowPart.Name = "Shadow"
     shadowPart.Anchored = true
     shadowPart.CanCollide = false
     shadowPart.Material = Enum.Material.SmoothPlastic
     shadowPart.Color = Color3.fromRGB(0,0,0)
-    shadowPart.Transparency = 1  -- oculto
+    shadowPart.Transparency = 1
     shadowPart.Size = Vector3.new(2,0.1,2)
     shadowPart.Shape = Enum.PartType.Cylinder
 
-    -- Tracer (línea 3D)
+    -- Tracer
     local tracerPart = Instance.new("Part", worldModel)
     tracerPart.Name = "Tracer"
     tracerPart.Anchored = true
     tracerPart.CanCollide = false
     tracerPart.Material = Enum.Material.Neon
     tracerPart.Color = Color3.fromRGB(0,255,200)
-    tracerPart.Transparency = 1  -- oculto
+    tracerPart.Transparency = 1
     tracerPart.Size = Vector3.new(0.1,0.1,0.1)
 
     -- Glow
@@ -370,21 +370,22 @@ do
     noTargetLabel.ZIndex = 11
     noTargetLabel.Visible = true
 
-    -- Off‑screen indicators (4 arrows)
+    -- Off‑screen indicators (4 arrows) — FIX: store ImageLabel as a child and reference by name
     local offscreenIndicators = {}
     for i = 1, 4 do
         local arrow = Instance.new("Frame", overlay)
+        arrow.Name = "OffscreenArrow_" .. i
         arrow.Size = UDim2.new(0,16,0,16)
         arrow.BackgroundTransparency = 1
         arrow.ZIndex = 20
         arrow.Visible = false
         local img = Instance.new("ImageLabel", arrow)
+        img.Name = "ArrowImg"
         img.Size = UDim2.new(1,0,1,0)
         img.BackgroundTransparency = 1
         img.Image = "rbxassetid://8532000591"
         img.ImageColor3 = Color3.fromRGB(255,255,100)
         img.ZIndex = 21
-        arrow.Img = img
         offscreenIndicators[i] = arrow
     end
     offscreenIndicators[1].Position = UDim2.new(0.5,-8,0,4)
@@ -423,7 +424,6 @@ do
             pcall(function() clonedChar:Destroy() end)
             clonedChar = nil
         end
-        -- Ocultar partes 3D
         box3D.Transparency = 1
         shadowPart.Transparency = 1
         tracerPart.Transparency = 1
@@ -748,7 +748,7 @@ do
             box3D.Transparency = 1
         end
 
-        -- ====== OFF‑SCREEN INDICATORS ======
+        -- ====== OFF‑SCREEN INDICATORS (FIX: use FindFirstChild) ======
         if S.OffscreenIndicators and not isVisible and charRoot then
             local viewportSize = viewport.AbsoluteSize
             local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
@@ -777,10 +777,13 @@ do
                     end
                 end
                 if bestArrow then
-                    bestArrow.Visible = true
-                    bestArrow.Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
-                    bestArrow.Img.ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
-                    bestArrow.Img.Rotation = math.deg(angle)
+                    local imgLabel = bestArrow:FindFirstChild("ArrowImg")
+                    if imgLabel then
+                        bestArrow.Visible = true
+                        bestArrow.Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
+                        imgLabel.ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
+                        imgLabel.Rotation = math.deg(angle)
+                    end
                     for _, a in ipairs(offscreenIndicators) do
                         if a ~= bestArrow then a.Visible = false end
                     end
@@ -930,5 +933,5 @@ do
         end
     end
 
-    print("=== ESP PREVIEW PANEL CORREGIDO CARGADO ===")
+    print("=== ESP PREVIEW PANEL FINAL CORREGIDO CARGADO ===")
 end
