@@ -1,90 +1,67 @@
 -- ============================================================================
--- ESP_PREVIEW.lua — Panel flotante de preview ESP en tiempo real
--- Muestra al enemigo más cercano con: Box, Healthbar, Skeleton, Nombre,
--- Distancia y Arma equipada. Se sincroniza con _G.ESPSettings.
--- Cargar en main.lua DESPUÉS de ESP.lua:
---   loadstring(game:HttpGet("URL_ESP_PREVIEW"))()
+-- ESPPreview.lua — Panel flotante de preview ESP en tiempo real
+-- Soporta: Box, Corner Box, Box Fill, Healthbar, Skeleton, Nombre,
+--          Distancia, Arma, Glow, Tracers, Rainbow, Visible Check, Team Colors
 -- ============================================================================
 
 do
-    local Players     = game:GetService("Players")
-    local RunService  = game:GetService("RunService")
-    local TweenService= game:GetService("TweenService")
-    local localPlayer = Players.LocalPlayer
+    local Players      = game:GetService("Players")
+    local RunService   = game:GetService("RunService")
+    local TweenService = game:GetService("TweenService")
+    local localPlayer  = Players.LocalPlayer
 
     print("=== CARGANDO ESP PREVIEW PANEL ===")
 
-    -- =========================================================================
-    -- CONFIGURACIÓN DEL PREVIEW
-    -- =========================================================================
-    _G.ESPPreview = {
-        Enabled = false,
-    }
+    _G.ESPPreview = { Enabled = false }
 
     -- =========================================================================
-    -- CREAR SCREENGUI (misma raíz que la librería principal)
+    -- SCREENGUI
     -- =========================================================================
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name             = "ESPPreviewGui"
-    screenGui.ResetOnSpawn     = false
-    screenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
-    screenGui.IgnoreGuiInset   = true
-
-    local ok = pcall(function()
-        screenGui.Parent = game:GetService("CoreGui")
-    end)
-    if not ok then
-        screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
-    end
+    screenGui.Name           = "ESPPreviewGui"
+    screenGui.ResetOnSpawn   = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.IgnoreGuiInset = true
+    local ok = pcall(function() screenGui.Parent = game:GetService("CoreGui") end)
+    if not ok then screenGui.Parent = localPlayer:WaitForChild("PlayerGui") end
 
     -- =========================================================================
-    -- VENTANA FLOTANTE PRINCIPAL
+    -- PANEL PRINCIPAL
     -- =========================================================================
     local PANEL_W = 192
-    local PANEL_H = 246
+    local PANEL_H = 268
 
     local panel = Instance.new("Frame")
-    panel.Name                  = "ESPPreviewPanel"
-    panel.Size                  = UDim2.new(0, PANEL_W, 0, PANEL_H)
-    panel.Position              = UDim2.new(1, -(PANEL_W + 14), 0.5, -(PANEL_H / 2))
-    panel.BackgroundColor3      = Color3.fromRGB(16, 16, 20)
-    panel.BorderSizePixel       = 0
-    panel.Visible               = false
-    panel.Active                = true  -- necesario para drag
-    panel.Parent                = screenGui
-
-    local panelCorner = Instance.new("UICorner")
-    panelCorner.CornerRadius = UDim.new(0, 5)
-    panelCorner.Parent = panel
-
-    local panelBorder = Instance.new("UIStroke")
+    panel.Name             = "ESPPreviewPanel"
+    panel.Size             = UDim2.new(0, PANEL_W, 0, PANEL_H)
+    panel.Position         = UDim2.new(1, -(PANEL_W + 14), 0.5, -(PANEL_H / 2))
+    panel.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    panel.BorderSizePixel  = 0
+    panel.Visible          = false
+    panel.Active           = true
+    panel.Parent           = screenGui
+    Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 5)
+    local panelBorder = Instance.new("UIStroke", panel)
     panelBorder.Color     = Color3.fromRGB(55, 55, 65)
     panelBorder.Thickness = 1
-    panelBorder.Parent    = panel
 
-    -- ── Barra de título (draggable) ──────────────────────────────────────────
-    local titleBar = Instance.new("Frame")
+    -- Title bar
+    local titleBar = Instance.new("Frame", panel)
     titleBar.Name             = "TitleBar"
     titleBar.Size             = UDim2.new(1, 0, 0, 22)
     titleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
     titleBar.BorderSizePixel  = 0
     titleBar.ZIndex           = 6
-    titleBar.Parent           = panel
-
-    local titleBarCorner = Instance.new("UICorner")
-    titleBarCorner.CornerRadius = UDim.new(0, 5)
-    titleBarCorner.Parent = titleBar
-
-    -- Fix inferior del titlebar (para que no tenga esquinas redondeadas abajo)
-    local titleFix = Instance.new("Frame")
+    Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 5)
+    -- Fix de esquinas inferiores del titlebar
+    local titleFix = Instance.new("Frame", titleBar)
     titleFix.Size             = UDim2.new(1, 0, 0, 8)
     titleFix.Position         = UDim2.new(0, 0, 1, -8)
     titleFix.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
     titleFix.BorderSizePixel  = 0
     titleFix.ZIndex           = 6
-    titleFix.Parent           = titleBar
 
-    local titleLabel = Instance.new("TextLabel")
+    local titleLabel = Instance.new("TextLabel", titleBar)
     titleLabel.Size               = UDim2.new(1, -8, 1, 0)
     titleLabel.Position           = UDim2.new(0, 8, 0, 0)
     titleLabel.BackgroundTransparency = 1
@@ -94,131 +71,144 @@ do
     titleLabel.TextSize           = 11
     titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
     titleLabel.ZIndex             = 7
-    titleLabel.Parent             = titleBar
 
-    -- Indicador "LIVE"
-    local liveLabel = Instance.new("TextLabel")
-    liveLabel.Size                = UDim2.new(0, 36, 0, 14)
-    liveLabel.Position            = UDim2.new(1, -40, 0.5, -7)
-    liveLabel.BackgroundColor3    = Color3.fromRGB(255, 60, 60)
-    liveLabel.Text                = "LIVE"
-    liveLabel.TextColor3          = Color3.fromRGB(255, 255, 255)
-    liveLabel.Font                = Enum.Font.GothamBold
-    liveLabel.TextSize            = 9
-    liveLabel.ZIndex              = 8
-    liveLabel.Parent              = titleBar
+    local liveLabel = Instance.new("TextLabel", titleBar)
+    liveLabel.Size             = UDim2.new(0, 36, 0, 14)
+    liveLabel.Position         = UDim2.new(1, -40, 0.5, -7)
+    liveLabel.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    liveLabel.Text             = "LIVE"
+    liveLabel.TextColor3       = Color3.fromRGB(255, 255, 255)
+    liveLabel.Font             = Enum.Font.GothamBold
+    liveLabel.TextSize         = 9
+    liveLabel.ZIndex           = 8
+    Instance.new("UICorner", liveLabel).CornerRadius = UDim.new(0, 3)
 
-    local liveCorner = Instance.new("UICorner")
-    liveCorner.CornerRadius = UDim.new(0, 3)
-    liveCorner.Parent = liveLabel
-
-    -- ── Drag del panel ───────────────────────────────────────────────────────
+    -- Drag
     do
         local dragging, dragStart, startPos
         titleBar.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging  = true
-                dragStart = input.Position
-                startPos  = panel.Position
+                dragging = true; dragStart = input.Position; startPos = panel.Position
             end
         end)
         titleBar.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
         end)
         game:GetService("UserInputService").InputChanged:Connect(function(input)
             if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local delta = input.Position - dragStart
-                panel.Position = UDim2.new(
-                    startPos.X.Scale, startPos.X.Offset + delta.X,
-                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
-                )
+                local d = input.Position - dragStart
+                panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+                                           startPos.Y.Scale, startPos.Y.Offset + d.Y)
             end
         end)
     end
 
     -- =========================================================================
-    -- VIEWPORTFRAME — personaje 3D
+    -- VIEWPORT FRAME
     -- =========================================================================
-    local VP_X    = 10
-    local VP_Y    = 26
-    local VP_W    = PANEL_W - 20
-    local VP_H    = 178
+    local VP_X = 10
+    local VP_Y = 26
+    local VP_W = PANEL_W - 20
+    local VP_H = 178
 
-    local viewport = Instance.new("ViewportFrame")
-    viewport.Name                = "CharacterViewport"
-    viewport.Size                = UDim2.new(0, VP_W, 0, VP_H)
-    viewport.Position            = UDim2.new(0, VP_X, 0, VP_Y)
-    viewport.BackgroundColor3    = Color3.fromRGB(18, 18, 24)
-    viewport.BorderSizePixel     = 0
-    viewport.Ambient             = Color3.fromRGB(130, 130, 140)
-    viewport.LightColor          = Color3.fromRGB(255, 255, 255)
-    viewport.LightDirection      = Vector3.new(-0.8, -1.5, -1)
-    viewport.ZIndex              = 2
-    viewport.Parent              = panel
+    local viewport = Instance.new("ViewportFrame", panel)
+    viewport.Name             = "CharacterViewport"
+    viewport.Size             = UDim2.new(0, VP_W, 0, VP_H)
+    viewport.Position         = UDim2.new(0, VP_X, 0, VP_Y)
+    viewport.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+    viewport.BorderSizePixel  = 0
+    viewport.Ambient          = Color3.fromRGB(130, 130, 140)
+    viewport.LightColor       = Color3.fromRGB(255, 255, 255)
+    viewport.LightDirection   = Vector3.new(-0.8, -1.5, -1)
+    viewport.ZIndex           = 2
+    Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 4)
 
-    local vpCorner = Instance.new("UICorner")
-    vpCorner.CornerRadius = UDim.new(0, 4)
-    vpCorner.Parent = viewport
-
-    -- Cámara del viewport
     local vpCam = Instance.new("Camera")
-    vpCam.FieldOfView = 45
-    vpCam.Parent      = viewport
+    vpCam.FieldOfView  = 45
+    vpCam.Parent       = viewport
     viewport.CurrentCamera = vpCam
 
-    -- ── Overlay 2D encima del viewport ───────────────────────────────────────
-    -- Al ser hijo del ViewportFrame, se renderiza como GUI 2D sobre el 3D
-    local overlay = Instance.new("Frame")
-    overlay.Name                 = "Overlay"
-    overlay.Size                 = UDim2.new(1, 0, 1, 0)
+    -- Overlay 2D encima del 3D
+    local overlay = Instance.new("Frame", viewport)
+    overlay.Name                  = "Overlay"
+    overlay.Size                  = UDim2.new(1, 0, 1, 0)
     overlay.BackgroundTransparency = 1
-    overlay.ClipsDescendants     = true
-    overlay.ZIndex               = 10
-    overlay.Parent               = viewport
+    overlay.ClipsDescendants      = true
+    overlay.ZIndex                = 10
 
-    -- ── Nombre ───────────────────────────────────────────────────────────────
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name               = "NameLabel"
-    nameLabel.Size               = UDim2.new(1, 0, 0, 18)
-    nameLabel.Position           = UDim2.new(0, 0, 0, 2)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text               = ""
-    nameLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextStrokeTransparency = 0
-    nameLabel.TextStrokeColor3   = Color3.fromRGB(0, 0, 0)
-    nameLabel.Font               = Enum.Font.GothamBold
-    nameLabel.TextSize           = 13
-    nameLabel.ZIndex             = 15
-    nameLabel.Visible            = false
-    nameLabel.Parent             = overlay
+    -- =========================================================================
+    -- ELEMENTOS OVERLAY
+    -- =========================================================================
 
-    -- ── Caja (Box) ───────────────────────────────────────────────────────────
-    local boxFrame = Instance.new("Frame")
-    boxFrame.Name                = "Box"
+    -- ── GLOW (detrás del personaje, frame grande semitransparente) ─────────────
+    local glowFrame = Instance.new("Frame", overlay)
+    glowFrame.Name                   = "Glow"
+    glowFrame.BackgroundColor3       = Color3.fromRGB(0, 255, 0)
+    glowFrame.BackgroundTransparency = 0.55
+    glowFrame.BorderSizePixel        = 0
+    glowFrame.ZIndex                 = 10
+    glowFrame.Visible                = false
+    Instance.new("UICorner", glowFrame).CornerRadius = UDim.new(0, 4)
+    -- Gradient radial simulado con UIGradient
+    local glowGrad = Instance.new("UIGradient", glowFrame)
+    glowGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,   0.3),
+        NumberSequenceKeypoint.new(0.5, 0.65),
+        NumberSequenceKeypoint.new(1,   1),
+    })
+    glowGrad.Rotation = 90
+
+    -- ── TRACER (línea del borde inferior del overlay al centro del box) ────────
+    local tracerFrame = Instance.new("Frame", overlay)
+    tracerFrame.Name              = "Tracer"
+    tracerFrame.BackgroundColor3  = Color3.fromRGB(255, 255, 255)
+    tracerFrame.BorderSizePixel   = 0
+    tracerFrame.AnchorPoint       = Vector2.new(0, 0.5)
+    tracerFrame.ZIndex            = 11
+    tracerFrame.Visible           = false
+
+    -- ── BOX FILL (relleno semitransparente) ────────────────────────────────────
+    local boxFillFrame = Instance.new("Frame", overlay)
+    boxFillFrame.Name                   = "BoxFill"
+    boxFillFrame.BackgroundColor3       = Color3.fromRGB(255, 60, 60)
+    boxFillFrame.BackgroundTransparency = 0.7
+    boxFillFrame.BorderSizePixel        = 0
+    boxFillFrame.ZIndex                 = 11
+    boxFillFrame.Visible                = false
+
+    -- ── BOX NORMAL (UIStroke) ──────────────────────────────────────────────────
+    local boxFrame = Instance.new("Frame", overlay)
+    boxFrame.Name                  = "Box"
     boxFrame.BackgroundTransparency = 1
-    boxFrame.ZIndex              = 12
-    boxFrame.Visible             = false
-    boxFrame.Parent              = overlay
-
-    local boxStroke = Instance.new("UIStroke")
+    boxFrame.ZIndex                 = 12
+    boxFrame.Visible                = false
+    local boxStroke = Instance.new("UIStroke", boxFrame)
     boxStroke.Thickness = 1
     boxStroke.Color     = Color3.fromRGB(255, 255, 255)
-    boxStroke.Parent    = boxFrame
 
-    -- ── Health Bar ───────────────────────────────────────────────────────────
-    local hbBg = Instance.new("Frame")
-    hbBg.Name               = "HBBg"
-    hbBg.Size               = UDim2.new(0, 5, 0.65, 0)
-    hbBg.Position           = UDim2.new(0, 3, 0.175, 0)
-    hbBg.BackgroundColor3   = Color3.fromRGB(0, 0, 0)
-    hbBg.BorderSizePixel    = 0
-    hbBg.ZIndex             = 12
-    hbBg.Visible            = false
-    hbBg.Parent             = overlay
+    -- ── BOX CORNER (8 segmentos) ───────────────────────────────────────────────
+    local cornerSegs = {}
+    for i = 1, 8 do
+        local f = Instance.new("Frame", overlay)
+        f.Name             = "Corner_" .. i
+        f.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        f.BorderSizePixel  = 0
+        f.AnchorPoint      = Vector2.new(0, 0.5)
+        f.ZIndex           = 13
+        f.Visible          = false
+        table.insert(cornerSegs, f)
+    end
 
-    local hbFill = Instance.new("Frame")
+    -- ── HEALTH BAR ─────────────────────────────────────────────────────────────
+    local hbBg = Instance.new("Frame", overlay)
+    hbBg.Name             = "HBBg"
+    hbBg.Size             = UDim2.new(0, 5, 0.65, 0)
+    hbBg.Position         = UDim2.new(0, 3, 0.175, 0)
+    hbBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    hbBg.BorderSizePixel  = 0
+    hbBg.ZIndex           = 12
+    hbBg.Visible          = false
+    local hbFill = Instance.new("Frame", hbBg)
     hbFill.Name             = "HBFill"
     hbFill.AnchorPoint      = Vector2.new(0, 1)
     hbFill.Size             = UDim2.new(1, -2, 1, 0)
@@ -226,88 +216,90 @@ do
     hbFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
     hbFill.BorderSizePixel  = 0
     hbFill.ZIndex           = 13
-    hbFill.Parent           = hbBg
 
-    -- ── Distancia ────────────────────────────────────────────────────────────
-    local distLabel = Instance.new("TextLabel")
-    distLabel.Name               = "DistLabel"
-    distLabel.Size               = UDim2.new(1, 0, 0, 14)
-    distLabel.Position           = UDim2.new(0, 0, 1, -28)
-    distLabel.BackgroundTransparency = 1
-    distLabel.Text               = ""
-    distLabel.TextColor3         = Color3.fromRGB(190, 190, 190)
-    distLabel.TextStrokeTransparency = 0.5
-    distLabel.TextStrokeColor3   = Color3.fromRGB(0, 0, 0)
-    distLabel.Font               = Enum.Font.Gotham
-    distLabel.TextSize           = 11
-    distLabel.ZIndex             = 15
-    distLabel.Visible            = false
-    distLabel.Parent             = overlay
+    -- ── NOMBRE ─────────────────────────────────────────────────────────────────
+    local nameLabel = Instance.new("TextLabel", overlay)
+    nameLabel.Name                    = "NameLabel"
+    nameLabel.Size                    = UDim2.new(1, 0, 0, 18)
+    nameLabel.Position                = UDim2.new(0, 0, 0, 2)
+    nameLabel.BackgroundTransparency  = 1
+    nameLabel.Text                    = ""
+    nameLabel.TextColor3              = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency  = 0
+    nameLabel.TextStrokeColor3        = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font                    = Enum.Font.GothamBold
+    nameLabel.TextSize                = 13
+    nameLabel.ZIndex                  = 15
+    nameLabel.Visible                 = false
 
-    -- ── Arma equipada ────────────────────────────────────────────────────────
-    local weaponLabel = Instance.new("TextLabel")
-    weaponLabel.Name             = "WeaponLabel"
-    weaponLabel.Size             = UDim2.new(1, 0, 0, 14)
-    weaponLabel.Position         = UDim2.new(0, 0, 1, -14)
-    weaponLabel.BackgroundTransparency = 1
-    weaponLabel.Text             = ""
-    weaponLabel.TextColor3       = Color3.fromRGB(210, 210, 210)
-    weaponLabel.TextStrokeTransparency = 0
-    weaponLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    weaponLabel.Font             = Enum.Font.GothamBold
-    weaponLabel.TextSize         = 11
-    weaponLabel.ZIndex           = 15
-    weaponLabel.Visible          = false
-    weaponLabel.Parent           = overlay
+    -- ── DISTANCIA ──────────────────────────────────────────────────────────────
+    local distLabel = Instance.new("TextLabel", overlay)
+    distLabel.Name                    = "DistLabel"
+    distLabel.Size                    = UDim2.new(1, 0, 0, 14)
+    distLabel.Position                = UDim2.new(0, 0, 1, -28)
+    distLabel.BackgroundTransparency  = 1
+    distLabel.Text                    = ""
+    distLabel.TextColor3              = Color3.fromRGB(190, 190, 190)
+    distLabel.TextStrokeTransparency  = 0.5
+    distLabel.TextStrokeColor3        = Color3.fromRGB(0, 0, 0)
+    distLabel.Font                    = Enum.Font.Gotham
+    distLabel.TextSize                = 11
+    distLabel.ZIndex                  = 15
+    distLabel.Visible                 = false
 
-    -- ── Esqueleto (líneas como Frames rotados) ───────────────────────────────
+    -- ── ARMA ───────────────────────────────────────────────────────────────────
+    local weaponLabel = Instance.new("TextLabel", overlay)
+    weaponLabel.Name                    = "WeaponLabel"
+    weaponLabel.Size                    = UDim2.new(1, 0, 0, 14)
+    weaponLabel.Position                = UDim2.new(0, 0, 1, -14)
+    weaponLabel.BackgroundTransparency  = 1
+    weaponLabel.Text                    = ""
+    weaponLabel.TextColor3              = Color3.fromRGB(210, 210, 210)
+    weaponLabel.TextStrokeTransparency  = 0
+    weaponLabel.TextStrokeColor3        = Color3.fromRGB(0, 0, 0)
+    weaponLabel.Font                    = Enum.Font.GothamBold
+    weaponLabel.TextSize                = 11
+    weaponLabel.ZIndex                  = 15
+    weaponLabel.Visible                 = false
+
+    -- ── ESQUELETO ──────────────────────────────────────────────────────────────
     local MAX_BONES = 15
     local skelLines = {}
     for i = 1, MAX_BONES do
-        local f = Instance.new("Frame")
-        f.Name              = "Bone_" .. i
-        f.BackgroundColor3  = Color3.fromRGB(255, 255, 255)
-        f.BorderSizePixel   = 0
-        f.AnchorPoint       = Vector2.new(0, 0.5)
-        f.ZIndex            = 14
-        f.Visible           = false
-
-        local stroke = Instance.new("UIStroke")
+        local f = Instance.new("Frame", overlay)
+        f.Name             = "Bone_" .. i
+        f.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        f.BorderSizePixel  = 0
+        f.AnchorPoint      = Vector2.new(0, 0.5)
+        f.ZIndex           = 14
+        f.Visible          = false
+        local stroke = Instance.new("UIStroke", f)
         stroke.Color     = Color3.fromRGB(0, 0, 0)
         stroke.Thickness = 1
-        stroke.Parent    = f
-
-        f.Parent = overlay
         table.insert(skelLines, f)
     end
 
-    -- ── Label "No Target" ─────────────────────────────────────────────────────
-    local noTargetLabel = Instance.new("TextLabel")
-    noTargetLabel.Size               = UDim2.new(1, 0, 1, 0)
+    -- ── NO TARGET ──────────────────────────────────────────────────────────────
+    local noTargetLabel = Instance.new("TextLabel", overlay)
+    noTargetLabel.Size                  = UDim2.new(1, 0, 1, 0)
     noTargetLabel.BackgroundTransparency = 1
-    noTargetLabel.Text               = "No Target"
-    noTargetLabel.TextColor3         = Color3.fromRGB(90, 90, 100)
-    noTargetLabel.Font               = Enum.Font.GothamBold
-    noTargetLabel.TextSize           = 13
-    noTargetLabel.ZIndex             = 11
-    noTargetLabel.Visible            = true
-    noTargetLabel.Parent             = overlay
+    noTargetLabel.Text                  = "No Target"
+    noTargetLabel.TextColor3            = Color3.fromRGB(90, 90, 100)
+    noTargetLabel.Font                  = Enum.Font.GothamBold
+    noTargetLabel.TextSize              = 13
+    noTargetLabel.ZIndex                = 11
+    noTargetLabel.Visible               = true
 
-    -- ── Barra info inferior ───────────────────────────────────────────────────
-    local infoBar = Instance.new("Frame")
-    infoBar.Name                = "InfoBar"
-    infoBar.Size                = UDim2.new(1, -20, 0, 28)
-    infoBar.Position            = UDim2.new(0, 10, 0, VP_Y + VP_H + 6)
-    infoBar.BackgroundColor3    = Color3.fromRGB(22, 22, 28)
-    infoBar.BorderSizePixel     = 0
-    infoBar.ZIndex              = 3
-    infoBar.Parent              = panel
-
-    local infoCorner = Instance.new("UICorner")
-    infoCorner.CornerRadius = UDim.new(0, 4)
-    infoCorner.Parent = infoBar
-
-    local infoText = Instance.new("TextLabel")
+    -- ── BARRA INFO INFERIOR ────────────────────────────────────────────────────
+    local infoBar = Instance.new("Frame", panel)
+    infoBar.Name             = "InfoBar"
+    infoBar.Size             = UDim2.new(1, -20, 0, 28)
+    infoBar.Position         = UDim2.new(0, 10, 0, VP_Y + VP_H + 6)
+    infoBar.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    infoBar.BorderSizePixel  = 0
+    infoBar.ZIndex           = 3
+    Instance.new("UICorner", infoBar).CornerRadius = UDim.new(0, 4)
+    local infoText = Instance.new("TextLabel", infoBar)
     infoText.Size               = UDim2.new(1, -8, 1, 0)
     infoText.Position           = UDim2.new(0, 8, 0, 0)
     infoText.BackgroundTransparency = 1
@@ -317,26 +309,62 @@ do
     infoText.TextSize           = 10
     infoText.TextXAlignment     = Enum.TextXAlignment.Left
     infoText.ZIndex             = 4
-    infoText.Parent             = infoBar
+
+    -- ── CHIPS DE ESTADO (Glow / Tracer / Rainbow) ──────────────────────────────
+    local chipBar = Instance.new("Frame", panel)
+    chipBar.Name             = "ChipBar"
+    chipBar.Size             = UDim2.new(1, -20, 0, 18)
+    chipBar.Position         = UDim2.new(0, 10, 0, VP_Y + VP_H + 38)
+    chipBar.BackgroundTransparency = 1
+    chipBar.ZIndex           = 4
+
+    local chipLayout = Instance.new("UIListLayout", chipBar)
+    chipLayout.FillDirection        = Enum.FillDirection.Horizontal
+    chipLayout.HorizontalAlignment  = Enum.HorizontalAlignment.Left
+    chipLayout.VerticalAlignment    = Enum.VerticalAlignment.Center
+    chipLayout.Padding              = UDim.new(0, 4)
+
+    local function makeChip(text, color)
+        local c = Instance.new("TextLabel", chipBar)
+        c.Text             = text
+        c.TextColor3       = Color3.fromRGB(255, 255, 255)
+        c.BackgroundColor3 = color
+        c.Font             = Enum.Font.GothamBold
+        c.TextSize         = 8
+        c.Size             = UDim2.new(0, 0, 1, 0)
+        c.AutomaticSize    = Enum.AutomaticSize.X
+        c.BorderSizePixel  = 0
+        c.ZIndex           = 5
+        c.Visible          = false
+        local pad = Instance.new("UIPadding", c)
+        pad.PaddingLeft   = UDim.new(0, 4)
+        pad.PaddingRight  = UDim.new(0, 4)
+        Instance.new("UICorner", c).CornerRadius = UDim.new(0, 3)
+        return c
+    end
+
+    local chipGlow    = makeChip("GLOW",    Color3.fromRGB(60, 180, 255))
+    local chipTracer  = makeChip("TRACER",  Color3.fromRGB(255, 160, 30))
+    local chipRainbow = makeChip("RAINBOW", Color3.fromRGB(180, 60, 255))
+    local chipVisible = makeChip("VISIBLE", Color3.fromRGB(60, 220, 100))
+    local chipTeam    = makeChip("TEAM",    Color3.fromRGB(255, 80, 80))
 
     -- =========================================================================
     -- UTILIDADES
     -- =========================================================================
 
-    -- Dibuja una línea 2D usando un Frame rotado
     local function DrawLine(frame, from, to, color, thickness)
-        local dx = to.X - from.X
-        local dy = to.Y - from.Y
+        local dx  = to.X - from.X
+        local dy  = to.Y - from.Y
         local len = math.sqrt(dx * dx + dy * dy)
         if len < 2 then frame.Visible = false return end
-        frame.Size     = UDim2.new(0, math.floor(len), 0, thickness or 2)
-        frame.Position = UDim2.new(0, math.floor(from.X), 0, math.floor(from.Y))
-        frame.Rotation = math.deg(math.atan2(dy, dx))
+        frame.Size             = UDim2.new(0, math.floor(len), 0, thickness or 2)
+        frame.Position         = UDim2.new(0, math.floor(from.X), 0, math.floor(from.Y))
+        frame.Rotation         = math.deg(math.atan2(dy, dx))
         frame.BackgroundColor3 = color or Color3.fromRGB(255, 255, 255)
-        frame.Visible  = true
+        frame.Visible          = true
     end
 
-    -- Proyecta una Part al espacio 2D del viewport usando la vpCam
     local function PartTo2D(part)
         if not (part and part.Parent) then return nil end
         local s, visible = vpCam:WorldToViewportPoint(part.Position)
@@ -344,7 +372,6 @@ do
         return Vector2.new(s.X, s.Y)
     end
 
-    -- Obtiene el color de salud (gradiente rojo→verde)
     local function GetHPColor(pct)
         if _G.ESPSettings then
             local lo = _G.ESPSettings.HealthBarColorLow  or Color3.fromRGB(255, 50, 50)
@@ -354,32 +381,23 @@ do
         return Color3.fromHSV(pct * 0.35, 0.9, 1)
     end
 
-    -- Obtiene el enemigo más cercano
     local function GetNearestEnemy()
         local localChar = localPlayer.Character
-        local localRoot = localChar and (
-            localChar:FindFirstChild("HumanoidRootPart") or
-            localChar:FindFirstChild("Torso")
-        )
-        if not localRoot then return nil, math.huge end
-
+        local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
+        if not localRoot then return nil end
         local nearest, nearestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= localPlayer and p.Character then
-                local root = p.Character:FindFirstChild("HumanoidRootPart")
-                    or p.Character:FindFirstChild("Torso")
+                local root = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
                 if root then
                     local dist = (root.Position - localRoot.Position).Magnitude
-                    if dist < nearestDist then
-                        nearest, nearestDist = p, dist
-                    end
+                    if dist < nearestDist then nearest, nearestDist = p, dist end
                 end
             end
         end
         return nearest, nearestDist
     end
 
-    -- Obtiene partes del personaje (R15 y R6)
     local function GetParts(model)
         return {
             Head          = model:FindFirstChild("Head"),
@@ -406,44 +424,61 @@ do
     end
 
     -- =========================================================================
+    -- CORNER BOX — dibuja 8 segmentos de esquina
+    -- =========================================================================
+    local function DrawCornerBox(bx, by, bw, bh, color, thickness)
+        local cW = math.floor(bw * 0.22)
+        local cH = math.floor(bh * 0.22)
+        local t  = thickness or 1
+        local x2 = bx + bw
+        local y2 = by + bh
+        -- Cada segmento: from → to
+        local segs = {
+            {Vector2.new(bx,      by),      Vector2.new(bx + cW, by)     },  -- TL horiz
+            {Vector2.new(bx,      by),      Vector2.new(bx,      by + cH)},  -- TL vert
+            {Vector2.new(x2 - cW, by),      Vector2.new(x2,      by)     },  -- TR horiz
+            {Vector2.new(x2,      by),      Vector2.new(x2,      by + cH)},  -- TR vert
+            {Vector2.new(bx,      y2),      Vector2.new(bx + cW, y2)     },  -- BL horiz
+            {Vector2.new(bx,      y2 - cH), Vector2.new(bx,      y2)     },  -- BL vert
+            {Vector2.new(x2 - cW, y2),      Vector2.new(x2,      y2)     },  -- BR horiz
+            {Vector2.new(x2,      y2 - cH), Vector2.new(x2,      y2)     },  -- BR vert
+        }
+        for i, seg in ipairs(segs) do
+            cornerSegs[i].Size = UDim2.new(0, 1, 0, t)  -- reset
+            DrawLine(cornerSegs[i], seg[1], seg[2], color, t)
+        end
+    end
+
+    local function HideCorners()
+        for _, f in ipairs(cornerSegs) do f.Visible = false end
+    end
+
+    -- =========================================================================
     -- GESTIÓN DEL CLON
     -- =========================================================================
     local clonedChar    = nil
     local currentTarget = nil
 
     local function DestroyClone()
-        if clonedChar then
-            pcall(function() clonedChar:Destroy() end)
-            clonedChar = nil
-        end
+        if clonedChar then pcall(function() clonedChar:Destroy() end) clonedChar = nil end
     end
 
     local function CloneCharacter(char)
         DestroyClone()
         local clone = char:Clone()
-
-        -- Limpiar scripts y sonidos
         for _, v in ipairs(clone:GetDescendants()) do
-            if v:IsA("Script") or v:IsA("LocalScript")
-                or v:IsA("Sound") or v:IsA("Animator") then
+            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("Animator") then
                 v:Destroy()
             end
         end
-
-        -- Anclar todas las partes
         for _, v in ipairs(clone:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Anchored   = true
-                v.CanCollide = false
-            end
+            if v:IsA("BasePart") then v.Anchored = true; v.CanCollide = false end
         end
-
         clone.Parent = viewport
         clonedChar   = clone
         return clone
     end
 
-    -- Copia las CFrames del personaje original al clon cada frame
     local function SyncClone(original, clone)
         for _, origPart in ipairs(original:GetDescendants()) do
             if origPart:IsA("BasePart") then
@@ -455,48 +490,48 @@ do
         end
     end
 
-    -- Posiciona la cámara del viewport frente al personaje
     local function UpdateCamera(char)
-        local root = char:FindFirstChild("HumanoidRootPart")
-            or char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
         if not root then return end
-        local pos    = root.Position
-        local lookAt = pos + Vector3.new(0, 0.7, 0)
-        vpCam.CFrame = CFrame.new(pos + Vector3.new(0, 1.1, 4.8), lookAt)
+        local pos = root.Position
+        vpCam.CFrame = CFrame.new(pos + Vector3.new(0, 1.1, 4.8), pos + Vector3.new(0, 0.7, 0))
     end
 
-    -- Oculta todos los elementos ESP del overlay
     local function HideAll()
         nameLabel.Visible   = false
         boxFrame.Visible    = false
+        boxFillFrame.Visible = false
+        glowFrame.Visible   = false
+        tracerFrame.Visible = false
         hbBg.Visible        = false
         distLabel.Visible   = false
         weaponLabel.Visible = false
         noTargetLabel.Visible = true
+        HideCorners()
         for _, l in ipairs(skelLines) do l.Visible = false end
     end
+
+    -- =========================================================================
+    -- RAINBOW STATE
+    -- =========================================================================
+    local rainbowHue = 0
 
     -- =========================================================================
     -- RENDER LOOP
     -- =========================================================================
     local frameCount = 0
 
-    RunService.RenderStepped:Connect(function()
+    RunService.RenderStepped:Connect(function(dt)
         if not _G.ESPPreview.Enabled then
-            panel.Visible = false
-            DestroyClone()
-            currentTarget = nil
+            if panel.Visible then panel.Visible = false; DestroyClone(); currentTarget = nil end
             return
         end
-
         panel.Visible = true
         frameCount    = frameCount + 1
 
-        -- Buscar enemigo más cercano cada 45 frames (~0.75 s a 60fps)
+        -- Buscar objetivo cada ~45 frames
         if frameCount % 45 == 0 or currentTarget == nil then
-            local newTarget, _ = GetNearestEnemy()
-
+            local newTarget = GetNearestEnemy()
             if newTarget ~= currentTarget then
                 currentTarget = newTarget
                 if currentTarget and currentTarget.Character then
@@ -507,9 +542,7 @@ do
             end
         end
 
-        -- Sin objetivo → mostrar mensaje
-        if not (currentTarget and currentTarget.Character
-            and clonedChar and clonedChar.Parent) then
+        if not (currentTarget and currentTarget.Character and clonedChar and clonedChar.Parent) then
             HideAll()
             infoText.Text = "~ sin objetivo ~"
             return
@@ -517,103 +550,177 @@ do
 
         local char      = currentTarget.Character
         local humanoid  = char:FindFirstChildOfClass("Humanoid")
-        local healthPct = humanoid
-            and math.clamp(humanoid.Health / math.max(humanoid.MaxHealth, 1), 0, 1)
-            or 1
+        local healthPct = humanoid and math.clamp(humanoid.Health / math.max(humanoid.MaxHealth, 1), 0, 1) or 1
 
-        -- Distancia
-        local localRoot = localPlayer.Character
-            and (localPlayer.Character:FindFirstChild("HumanoidRootPart")
-              or localPlayer.Character:FindFirstChild("Torso"))
-        local charRoot  = char:FindFirstChild("HumanoidRootPart")
-            or char:FindFirstChild("Torso")
-        local dist = (localRoot and charRoot)
-            and math.floor((charRoot.Position - localRoot.Position).Magnitude)
-            or 0
+        local localChar = localPlayer.Character
+        local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
+        local charRoot  = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+        local dist      = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
 
-        -- Arma equipada
-        local tool = char:FindFirstChildOfClass("Tool")
+        local tool       = char:FindFirstChildOfClass("Tool")
         local weaponName = tool and tool.Name or ""
 
-        -- Sincronizar clon y cámara
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
-
         noTargetLabel.Visible = false
 
-        -- Barra de info inferior
         infoText.Text = currentTarget.Name
             .. "  •  " .. dist .. "m"
             .. (weaponName ~= "" and ("  •  " .. weaponName) or "")
 
-        -- ── Nombre ────────────────────────────────────────────────────────────
         local espS = _G.ESPSettings
+
+        -- ── Rainbow: calcular color global ──────────────────────────────────
+        local isRainbow = espS and espS.RainbowMode
+        if isRainbow then
+            rainbowHue = (rainbowHue + dt * (espS.RainbowSpeed or 0.5)) % 1
+        end
+        local function rainbowOr(base)
+            return isRainbow and Color3.fromHSV(rainbowHue, 1, 1) or (base or Color3.fromRGB(255,255,255))
+        end
+
+        -- ── Calcular posición y tamaño del box en 2D ──────────────────────
+        local bx, by, bw, bh = nil, nil, nil, nil
+        local head  = clonedChar:FindFirstChild("Head")
+        local root2 = clonedChar:FindFirstChild("HumanoidRootPart") or clonedChar:FindFirstChild("Torso")
+        if head and root2 then
+            local hp = PartTo2D(head)
+            local rp = PartTo2D(root2)
+            if hp and rp then
+                local vpW = viewport.AbsoluteSize.X
+                bh = math.abs(rp.Y - hp.Y) + 22
+                bw = bh * 0.58
+                bx = vpW * 0.5 - bw * 0.5
+                by = hp.Y - 11
+            end
+        end
+
+        -- ── GLOW ────────────────────────────────────────────────────────────
+        local glowOn = espS and espS.GlowEnabled
+        chipGlow.Visible = glowOn and true or false
+        if glowOn and bx then
+            local pad = 10
+            local gc  = rainbowOr(espS.GlowColor)
+            glowFrame.BackgroundColor3       = gc
+            glowFrame.BackgroundTransparency = espS.GlowTransparency or 0.5
+            glowFrame.Size     = UDim2.new(0, math.floor(bw + pad*2), 0, math.floor(bh + pad*2))
+            glowFrame.Position = UDim2.new(0, math.floor(bx - pad), 0, math.floor(by - pad))
+            glowFrame.Visible  = true
+            -- actualizar gradiente con color
+            glowGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, gc),
+                ColorSequenceKeypoint.new(1, gc),
+            })
+        else
+            glowFrame.Visible = false
+        end
+
+        -- ── BOX FILL ────────────────────────────────────────────────────────
+        local fillOn = espS and espS.BoxFillEnabled
+        if fillOn and bx then
+            boxFillFrame.BackgroundColor3       = rainbowOr(espS.BoxFillColor)
+            boxFillFrame.BackgroundTransparency = espS.BoxFillTransparency or 0.7
+            boxFillFrame.Size     = UDim2.new(0, math.floor(bw), 0, math.floor(bh))
+            boxFillFrame.Position = UDim2.new(0, math.floor(bx), 0, math.floor(by))
+            boxFillFrame.Visible  = true
+        else
+            boxFillFrame.Visible = false
+        end
+
+        -- ── BOX (Normal o Corner) ────────────────────────────────────────────
+        local boxOn     = espS and espS.BoxEnabled
+        local boxColor  = rainbowOr(espS and espS.BoxColor)
+        local boxThick  = espS and math.clamp(espS.BoxThickness or 1, 1, 4) or 1
+        local isCorner  = espS and (espS.BoxType == "Corner")
+
+        if boxOn and bx then
+            if isCorner then
+                boxFrame.Visible = false
+                DrawCornerBox(bx, by, bw, bh, boxColor, boxThick)
+            else
+                HideCorners()
+                boxFrame.Size     = UDim2.new(0, math.floor(bw), 0, math.floor(bh))
+                boxFrame.Position = UDim2.new(0, math.floor(bx), 0, math.floor(by))
+                boxStroke.Color     = boxColor
+                boxStroke.Thickness = boxThick
+                boxFrame.Visible    = true
+            end
+        else
+            boxFrame.Visible = false
+            HideCorners()
+        end
+
+        -- ── TRACER ──────────────────────────────────────────────────────────
+        local tracerOn  = espS and espS.TracersEnabled
+        chipTracer.Visible = tracerOn and true or false
+        if tracerOn and bx then
+            local origin    = espS.TracersOrigin or "Bottom"
+            local vpH       = viewport.AbsoluteSize.Y
+            local vpW2      = viewport.AbsoluteSize.X
+            -- punto de origen del tracer (desde donde sale la línea)
+            local fromX, fromY
+            if origin == "Center" then
+                fromX = vpW2 * 0.5
+                fromY = vpH * 0.5
+            elseif origin == "Top" then
+                fromX = vpW2 * 0.5
+                fromY = 0
+            else -- Bottom (default)
+                fromX = vpW2 * 0.5
+                fromY = vpH
+            end
+            -- destino: centro inferior del box
+            local toX = bx + bw * 0.5
+            local toY = by + bh
+            local tc  = rainbowOr(espS.TracersColor)
+            DrawLine(tracerFrame, Vector2.new(fromX, fromY), Vector2.new(toX, toY),
+                     tc, espS.TracersThickness or 1)
+            tracerFrame.Visible = true
+        else
+            tracerFrame.Visible = false
+        end
+
+        -- ── HEALTH BAR ──────────────────────────────────────────────────────
+        if espS and espS.HealthBarEnabled then
+            hbBg.Visible              = true
+            hbFill.Size               = UDim2.new(1, -2, healthPct, 0)
+            hbFill.Position           = UDim2.new(0, 1, 1 - healthPct, 0)
+            hbFill.BackgroundColor3   = GetHPColor(healthPct)
+        else
+            hbBg.Visible = false
+        end
+
+        -- ── NOMBRE ──────────────────────────────────────────────────────────
         if espS and espS.NameEnabled then
             nameLabel.Text       = currentTarget.Name
-            nameLabel.TextColor3 = espS.NameColor or Color3.fromRGB(255, 255, 255)
+            nameLabel.TextColor3 = rainbowOr(espS.NameColor)
+            nameLabel.TextStrokeTransparency = (espS.NameOutline and 0 or 1)
             nameLabel.Visible    = true
         else
             nameLabel.Visible = false
         end
 
-        -- ── Distancia ─────────────────────────────────────────────────────────
+        -- ── DISTANCIA ───────────────────────────────────────────────────────
         if espS and espS.DistanceEnabled then
-            distLabel.Text    = dist .. " m"
-            distLabel.Visible = true
+            distLabel.Text       = dist .. " m"
+            distLabel.TextColor3 = espS.DistanceColor or Color3.fromRGB(200, 200, 200)
+            distLabel.TextStrokeTransparency = (espS.DistanceOutline and 0 or 1)
+            distLabel.Visible    = true
         else
             distLabel.Visible = false
         end
 
-        -- ── Arma ──────────────────────────────────────────────────────────────
-        if weaponName ~= "" then
-            weaponLabel.Text    = weaponName
-            weaponLabel.Visible = true
-        else
-            weaponLabel.Visible = false
-        end
+        -- ── ARMA ────────────────────────────────────────────────────────────
+        weaponLabel.Text    = weaponName
+        weaponLabel.Visible = weaponName ~= ""
 
-        -- ── Health Bar ────────────────────────────────────────────────────────
-        if espS and espS.HealthBarEnabled then
-            hbBg.Visible          = true
-            hbFill.Size           = UDim2.new(1, -2, healthPct, 0)
-            hbFill.Position       = UDim2.new(0, 1, 1 - healthPct, 0)
-            hbFill.BackgroundColor3 = GetHPColor(healthPct)
-        else
-            hbBg.Visible = false
-        end
-
-        -- ── Box ───────────────────────────────────────────────────────────────
-        if espS and espS.BoxEnabled then
-            local head = clonedChar:FindFirstChild("Head")
-            local root2 = clonedChar:FindFirstChild("HumanoidRootPart")
-                or clonedChar:FindFirstChild("Torso")
-
-            if head and root2 then
-                local hp = PartTo2D(head)
-                local rp = PartTo2D(root2)
-                if hp and rp then
-                    local vpW = viewport.AbsoluteSize.X
-                    local bh  = math.abs(rp.Y - hp.Y) + 22
-                    local bw  = bh * 0.58
-                    local bx  = vpW * 0.5 - bw * 0.5
-                    local by  = hp.Y - 11
-
-                    boxFrame.Size     = UDim2.new(0, math.floor(bw), 0, math.floor(bh))
-                    boxFrame.Position = UDim2.new(0, math.floor(bx), 0, math.floor(by))
-                    boxStroke.Color   = espS.BoxColor or Color3.fromRGB(255, 255, 255)
-                    boxStroke.Thickness = espS.BoxThickness or 1
-                    boxFrame.Visible  = true
-                end
-            end
-        else
-            boxFrame.Visible = false
-        end
-
-        -- ── Skeleton ──────────────────────────────────────────────────────────
+        -- ── SKELETON ────────────────────────────────────────────────────────
         if espS and espS.SkeletonEnabled then
-            local parts = GetParts(clonedChar)
+            local parts      = GetParts(clonedChar)
+            local skelColor  = rainbowOr(espS.SkeletonColor)
+            local skelThick  = espS.SkeletonThickness or 1
+            local outColor   = espS.SkeletonOutlineColor or Color3.fromRGB(0,0,0)
 
-            -- Conexiones R15 y R6
             local bones = {}
             if parts.UpperTorso then
                 bones = {
@@ -642,49 +749,39 @@ do
                 }
             end
 
-            local skelColor = (espS.SkeletonColor) or Color3.fromRGB(255, 255, 255)
-            local skelThick = (espS.SkeletonThickness) or 1
-
             for i, bone in ipairs(bones) do
                 if i > MAX_BONES then break end
                 local s1 = bone[1] and PartTo2D(bone[1])
                 local s2 = bone[2] and PartTo2D(bone[2])
                 if s1 and s2 then
-                    -- Actualizar color del stroke (contorno negro)
                     local stroke = skelLines[i]:FindFirstChildOfClass("UIStroke")
-                    if stroke then
-                        stroke.Color     = espS.SkeletonOutlineColor or Color3.fromRGB(0,0,0)
-                        stroke.Thickness = skelThick + 1
-                    end
-                    DrawLine(skelLines[i], s1, s2, skelColor, math.max(1, skelThick + 1))
+                    if stroke then stroke.Color = outColor; stroke.Thickness = skelThick + 1 end
+                    DrawLine(skelLines[i], s1, s2, skelColor, math.max(1, skelThick))
                 else
                     skelLines[i].Visible = false
                 end
             end
-
-            -- Ocultar líneas no usadas
-            for i = #bones + 1, MAX_BONES do
-                skelLines[i].Visible = false
-            end
+            for i = #bones + 1, MAX_BONES do skelLines[i].Visible = false end
         else
             for _, l in ipairs(skelLines) do l.Visible = false end
         end
+
+        -- ── CHIPS ───────────────────────────────────────────────────────────
+        chipRainbow.Visible = isRainbow and true or false
+        chipVisible.Visible = espS and espS.VisibleCheck and true or false
+        chipTeam.Visible    = espS and espS.TeamCheck    and true or false
     end)
 
     -- =========================================================================
-    -- LIVE BLINK (parpadeo del indicador LIVE)
+    -- LIVE BLINK
     -- =========================================================================
     task.spawn(function()
         while true do
             task.wait(0.8)
             if panel.Visible then
-                TweenService:Create(liveLabel,
-                    TweenInfo.new(0.2), {BackgroundTransparency = 0.6}
-                ):Play()
+                TweenService:Create(liveLabel, TweenInfo.new(0.2), {BackgroundTransparency = 0.6}):Play()
                 task.wait(0.25)
-                TweenService:Create(liveLabel,
-                    TweenInfo.new(0.2), {BackgroundTransparency = 0}
-                ):Play()
+                TweenService:Create(liveLabel, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
             end
         end
     end)
@@ -692,17 +789,8 @@ do
     -- =========================================================================
     -- API PÚBLICA
     -- =========================================================================
-    function _G.ESPPreview:Enable()
-        _G.ESPPreview.Enabled = true
-        panel.Visible = true
-    end
-
-    function _G.ESPPreview:Disable()
-        _G.ESPPreview.Enabled = false
-        panel.Visible = false
-        DestroyClone()
-        currentTarget = nil
-    end
+    function _G.ESPPreview:Enable()  self.Enabled = true;  panel.Visible = true  end
+    function _G.ESPPreview:Disable() self.Enabled = false; panel.Visible = false; DestroyClone(); currentTarget = nil end
 
     print("=== ESP PREVIEW PANEL LISTO ===")
 end
