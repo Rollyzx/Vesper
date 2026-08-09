@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — FINAL CORREGIDO: sin errores GetDescendants, tracer visible
+-- ESPPreview.lua — PCALL WRAPPER, SIN ERRORES GetDescendants
 -- ============================================================================
 
 do
@@ -401,43 +401,52 @@ do
         tracerLine.Visible = false
     end
 
-    -- FIX: guard against nil char
+    -- SAFE CloneCharacter with pcall
     local function CloneCharacter(char)
-        if not char then
+        if not char or not char.Parent then
             DestroyClone()
             return
         end
-        DestroyClone()  -- remove old clone
-        local clone = char:Clone()
-        for _, v in ipairs(clone:GetDescendants()) do
-            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("Animator") then
-                v:Destroy()
+        local success, result = pcall(function()
+            DestroyClone()
+            local clone = char:Clone()
+            for _, v in ipairs(clone:GetDescendants()) do
+                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("Animator") then
+                    v:Destroy()
+                end
             end
-        end
-        for _, v in ipairs(clone:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Anchored = true
-                v.CanCollide = false
+            for _, v in ipairs(clone:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Anchored = true
+                    v.CanCollide = false
+                end
             end
+            clone.Parent = worldModel
+            clonedChar = clone
+            return clone
+        end)
+        if not success then
+            DestroyClone()
         end
-        clone.Parent = worldModel
-        clonedChar = clone
-        return clone
+        return result
     end
 
     local function SyncClone(original, clone)
         if not (original and clone) then return end
-        for _, origPart in ipairs(original:GetDescendants()) do
-            if origPart:IsA("BasePart") then
-                local clonePart = clone:FindFirstChild(origPart.Name, true)
-                if clonePart and clonePart:IsA("BasePart") then
-                    clonePart.CFrame = origPart.CFrame
+        pcall(function()
+            for _, origPart in ipairs(original:GetDescendants()) do
+                if origPart:IsA("BasePart") then
+                    local clonePart = clone:FindFirstChild(origPart.Name, true)
+                    if clonePart and clonePart:IsA("BasePart") then
+                        clonePart.CFrame = origPart.CFrame
+                    end
                 end
             end
-        end
+        end)
     end
 
     local function UpdateCamera(char)
+        if not char then return end
         local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
         if not root then return end
         local pos = root.Position
@@ -467,7 +476,7 @@ do
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= localPlayer and p.Character then
                 local root = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
-                if root then
+                if root and root.Parent then
                     local dist = (root.Position - localRoot.Position).Magnitude
                     if dist < nearestDist then
                         nearest, nearestDist = p, dist
@@ -479,6 +488,7 @@ do
     end
 
     local function GetParts(model)
+        if not model then return {} end
         return {
             Head          = model:FindFirstChild("Head"),
             UpperTorso    = model:FindFirstChild("UpperTorso"),
@@ -554,8 +564,7 @@ do
             if newTarget ~= currentTarget then
                 currentTarget = newTarget
                 currentTargetDist = dist or math.huge
-                -- FIX: only clone if character exists
-                if currentTarget and currentTarget.Character then
+                if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
                     CloneCharacter(currentTarget.Character)
                 else
                     DestroyClone()
@@ -565,12 +574,12 @@ do
             end
         end
 
-        -- additional safety: if currentTarget lost character, destroy clone
-        if currentTarget and not currentTarget.Character then
+        -- Safety: if target lost character, destroy clone
+        if currentTarget and (not currentTarget.Character or not currentTarget.Character.Parent) then
             DestroyClone()
         end
 
-        if not (currentTarget and currentTarget.Character and clonedChar and clonedChar.Parent) then
+        if not (currentTarget and currentTarget.Character and currentTarget.Character.Parent and clonedChar and clonedChar.Parent) then
             HideAll()
             return
         end
@@ -920,6 +929,6 @@ do
     task.wait(0.5)
     _G.ESPPreview:Enable()
 
-    print("=== ESP PREVIEW PANEL — SIN ERRORES, TRACER ACTIVO ===")
+    print("=== ESP PREVIEW PANEL — PCALL WRAPPER, SIN ERRORES ===")
     print("Controles: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
 end
