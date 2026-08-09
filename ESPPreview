@@ -1,6 +1,6 @@
 -- ============================================================================
--- ESPPreview.lua — Panel flotante con todas las mejoras
--- Cargar DESPUÉS de ESP.lua (para usar _G.ESPSettings extendido)
+-- ESPPreview.lua — Panel flotante con todas las mejoras (CORREGIDO)
+-- Cargar DESPUÉS de ESP.lua
 -- ============================================================================
 
 do
@@ -16,7 +16,7 @@ do
     local S = _G.ESPSettings
 
     S.BoxEnabled          = (S.BoxEnabled          == nil) and true or S.BoxEnabled
-    S.BoxStyle            = S.BoxStyle            or "2D"   -- "2D","3D","Arrow","Circle","None"
+    S.BoxStyle            = S.BoxStyle            or "2D"
     S.BoxColor            = S.BoxColor            or Color3.fromRGB(255,255,255)
     S.BoxThickness        = S.BoxThickness        or 2
     S.HealthBarEnabled    = (S.HealthBarEnabled   == nil) and true or S.HealthBarEnabled
@@ -76,7 +76,6 @@ do
         }
     }
 
-    -- Aplicar tema (actualiza todas las referencias)
     local function applyTheme(themeName)
         local t = THEMES[themeName] or THEMES.Default
         S.BoxColor      = t.BoxColor
@@ -88,7 +87,6 @@ do
         S.HealthBarColorLow  = t.HealthBarLow
         S.HealthBarColorHigh = t.HealthBarHigh
         S.ShadowOpacity = t.ShadowOpacity or 0.2
-        -- Actualizar elementos visuales inmediatamente (se hará en el próximo frame)
     end
     applyTheme(S.Theme)
 
@@ -209,11 +207,11 @@ do
     vpCam.FieldOfView = 45
     viewport.CurrentCamera = vpCam
 
-    -- WorldModel para objetos 3D
+    -- WorldModel
     local worldModel = Instance.new("WorldModel", viewport)
 
     -- =========================================================================
-    -- ELEMENTOS 3D (caja, sombra, tracer, arrow)
+    -- ELEMENTOS 3D (caja, sombra, tracer)
     -- =========================================================================
     -- Caja 3D (neon)
     local box3D = Instance.new("Part", worldModel)
@@ -222,9 +220,8 @@ do
     box3D.CanCollide = false
     box3D.Material = Enum.Material.Neon
     box3D.Color = Color3.fromRGB(0,255,255)
-    box3D.Transparency = 0.6
+    box3D.Transparency = 1  -- oculto por defecto
     box3D.Size = Vector3.new(1,1,1)
-    box3D.Visible = false
 
     -- Sombra (disco)
     local shadowPart = Instance.new("Part", worldModel)
@@ -233,23 +230,21 @@ do
     shadowPart.CanCollide = false
     shadowPart.Material = Enum.Material.SmoothPlastic
     shadowPart.Color = Color3.fromRGB(0,0,0)
-    shadowPart.Transparency = 0.7
+    shadowPart.Transparency = 1  -- oculto
     shadowPart.Size = Vector3.new(2,0.1,2)
     shadowPart.Shape = Enum.PartType.Cylinder
-    shadowPart.Visible = false
 
-    -- Tracer (línea 3D entre local y target)
+    -- Tracer (línea 3D)
     local tracerPart = Instance.new("Part", worldModel)
     tracerPart.Name = "Tracer"
     tracerPart.Anchored = true
     tracerPart.CanCollide = false
     tracerPart.Material = Enum.Material.Neon
     tracerPart.Color = Color3.fromRGB(0,255,200)
-    tracerPart.Transparency = 0.5
-    tracerPart.Size = Vector3.new(0.1,0.1,0.1) -- se estira dinámicamente
-    tracerPart.Visible = false
+    tracerPart.Transparency = 1  -- oculto
+    tracerPart.Size = Vector3.new(0.1,0.1,0.1)
 
-    -- Glow (Highlight)
+    -- Glow
     local glowHL = Instance.new("Highlight", worldModel)
     glowHL.FillColor = Color3.fromRGB(255,80,80)
     glowHL.OutlineColor = Color3.fromRGB(255,80,80)
@@ -258,7 +253,7 @@ do
     glowHL.Enabled = false
 
     -- =========================================================================
-    -- OVERLAY 2D (encima del Viewport)
+    -- OVERLAY 2D
     -- =========================================================================
     local overlay = Instance.new("Frame", viewport)
     overlay.Size = UDim2.new(1,0,1,0)
@@ -266,7 +261,7 @@ do
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Elementos 2D (con sombras)
+    -- Nombre
     local nameLabel = Instance.new("TextLabel", overlay)
     nameLabel.Size = UDim2.new(1,0,0,20)
     nameLabel.Position = UDim2.new(0,0,0,2)
@@ -386,16 +381,16 @@ do
         local img = Instance.new("ImageLabel", arrow)
         img.Size = UDim2.new(1,0,1,0)
         img.BackgroundTransparency = 1
-        img.Image = "rbxassetid://8532000591" -- flecha hacia arriba
+        img.Image = "rbxassetid://8532000591"
         img.ImageColor3 = Color3.fromRGB(255,255,100)
         img.ZIndex = 21
         arrow.Img = img
         offscreenIndicators[i] = arrow
     end
-    offscreenIndicators[1].Position = UDim2.new(0.5,-8,0,4)   -- arriba
-    offscreenIndicators[2].Position = UDim2.new(0.5,-8,1,-20) -- abajo
-    offscreenIndicators[3].Position = UDim2.new(0,4,0.5,-8)   -- izquierda
-    offscreenIndicators[4].Position = UDim2.new(1,-20,0.5,-8) -- derecha
+    offscreenIndicators[1].Position = UDim2.new(0.5,-8,0,4)
+    offscreenIndicators[2].Position = UDim2.new(0.5,-8,1,-20)
+    offscreenIndicators[3].Position = UDim2.new(0,4,0.5,-8)
+    offscreenIndicators[4].Position = UDim2.new(1,-20,0.5,-8)
 
     -- =========================================================================
     -- SKELETON LINES
@@ -428,9 +423,10 @@ do
             pcall(function() clonedChar:Destroy() end)
             clonedChar = nil
         end
-        box3D.Visible = false
-        shadowPart.Visible = false
-        tracerPart.Visible = false
+        -- Ocultar partes 3D
+        box3D.Transparency = 1
+        shadowPart.Transparency = 1
+        tracerPart.Transparency = 1
         glowHL.Enabled = false
         glowHL.Adornee = nil
     end
@@ -559,9 +555,9 @@ do
         distLabel.Visible = false; distShadow.Visible = false
         weaponLabel.Visible = false; weapShadow.Visible = false
         noTargetLabel.Visible = true
-        box3D.Visible = false
-        shadowPart.Visible = false
-        tracerPart.Visible = false
+        box3D.Transparency = 1
+        shadowPart.Transparency = 1
+        tracerPart.Transparency = 1
         glowHL.Enabled = false
         for _, l in ipairs(skelLines) do l.Visible = false end
         for _, a in ipairs(offscreenIndicators) do a.Visible = false end
@@ -620,7 +616,6 @@ do
         end
         isTargetVisible = isVisible
 
-        -- Sincronizar clon y cámara
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
 
@@ -636,33 +631,31 @@ do
 
         -- ====== SHADOW ======
         if S.ShadowEnabled and charRoot then
-            shadowPart.Visible = true
-            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
             shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.3)
+            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
             local size = 1.2 + (dist / 200)
             shadowPart.Size = Vector3.new(size, 0.1, size)
         else
-            shadowPart.Visible = false
+            shadowPart.Transparency = 1
         end
 
-        -- ====== TRACER (línea 3D desde localRoot hasta charRoot) ======
+        -- ====== TRACER ======
         if S.TracerEnabled and localRoot and charRoot then
-            tracerPart.Visible = true
             local startPos = localRoot.Position
             local endPos = charRoot.Position
             local mid = (startPos + endPos) / 2
             local dir = (endPos - startPos)
             local length = dir.Magnitude
             if length > 0.5 then
+                tracerPart.Transparency = 0.4 + (dist / 1000) * 0.3
                 tracerPart.CFrame = CFrame.lookAt(mid, endPos) * CFrame.Angles(math.pi/2,0,0)
                 tracerPart.Size = Vector3.new(0.08, length, 0.08)
                 tracerPart.Color = S.TracerColor
-                tracerPart.Transparency = 0.4 + (dist / 1000) * 0.3
             else
-                tracerPart.Visible = false
+                tracerPart.Transparency = 1
             end
         else
-            tracerPart.Visible = false
+            tracerPart.Transparency = 1
         end
 
         -- ====== BOX STYLE ======
@@ -678,7 +671,6 @@ do
             local vpH = viewport.AbsoluteSize.Y
 
             if boxStyle == "2D" then
-                -- Overlay 2D box
                 if headPos2D and rootPos2D then
                     local bh = math.abs(rootPos2D.Y - headPos2D.Y) + 22
                     local bw = bh * 0.6
@@ -692,51 +684,44 @@ do
                 else
                     boxFrame.Visible = false
                 end
-                box3D.Visible = false
+                box3D.Transparency = 1
             elseif boxStyle == "3D" then
-                -- 3D neon box
-                box3D.Visible = true
+                box3D.Transparency = 0.5 + (dist / 1000) * 0.3
                 local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
                 local height = (headPos - rootPart.Position).Y + 0.5
                 local width = height * 0.6
                 box3D.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, height/2, 0))
                 box3D.Size = Vector3.new(width, height, width)
                 box3D.Color = S.BoxColor
-                box3D.Transparency = 0.5 + (dist / 1000) * 0.3
                 boxFrame.Visible = false
             elseif boxStyle == "Arrow" then
-                -- Flecha apuntando desde el centro de la pantalla hacia el objetivo
                 if rootPos2D then
                     local center = Vector2.new(vpW/2, vpH/2)
                     local dir = (rootPos2D - center)
                     local angle = math.atan2(dir.Y, dir.X)
-                    -- Mostrar un triangulo en el overlay
-                    -- Usamos un ImageLabel rotado
-                    local arrowFrame = boxFrame -- reutilizamos boxFrame para simplificar
+                    local arrowFrame = boxFrame
                     arrowFrame.Size = UDim2.new(0,20,0,20)
                     arrowFrame.Position = UDim2.new(0, rootPos2D.X - 10, 0, rootPos2D.Y - 10)
                     arrowFrame.BackgroundTransparency = 1
-                    -- Necesitamos un ImageLabel dentro
                     local img = arrowFrame:FindFirstChild("ArrowImg")
                     if not img then
                         img = Instance.new("ImageLabel", arrowFrame)
                         img.Name = "ArrowImg"
                         img.Size = UDim2.new(1,0,1,0)
                         img.BackgroundTransparency = 1
-                        img.Image = "rbxassetid://8532000591" -- flecha
+                        img.Image = "rbxassetid://8532000591"
                         img.ZIndex = 13
                     end
                     img.ImageColor3 = S.BoxColor
                     img.Rotation = math.deg(angle)
                     arrowFrame.Visible = true
-                    box3D.Visible = false
+                    box3D.Transparency = 1
                 else
                     boxFrame.Visible = false
                 end
             elseif boxStyle == "Circle" then
-                -- Círculo alrededor del objetivo (2D) usando UIStroke en un Frame
                 if rootPos2D then
-                    local radius = 30 + (dist / 20) -- adaptativo
+                    local radius = 30 + (dist / 20)
                     boxFrame.Size = UDim2.new(0, radius*2, 0, radius*2)
                     boxFrame.Position = UDim2.new(0, rootPos2D.X - radius, 0, rootPos2D.Y - radius)
                     boxFrame.BackgroundTransparency = 1
@@ -747,21 +732,20 @@ do
                     stroke.Thickness = S.BoxThickness or 2
                     stroke.Color = S.BoxColor
                     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                    -- Para hacerlo círculo, usamos UICorner
                     local corner = boxFrame:FindFirstChildOfClass("UICorner")
                     if not corner then
                         corner = Instance.new("UICorner", boxFrame)
                     end
                     corner.CornerRadius = UDim.new(1,0)
                     boxFrame.Visible = true
-                    box3D.Visible = false
+                    box3D.Transparency = 1
                 else
                     boxFrame.Visible = false
                 end
             end
         else
             boxFrame.Visible = false
-            box3D.Visible = false
+            box3D.Transparency = 1
         end
 
         -- ====== OFF‑SCREEN INDICATORS ======
@@ -772,7 +756,6 @@ do
             if pos2D and pos2D.Z > 0 then
                 local dir = Vector2.new(pos2D.X, pos2D.Y) - center
                 local angle = math.atan2(dir.Y, dir.X)
-                -- Encontrar el borde más cercano
                 local edgeX, edgeY
                 if math.abs(dir.X) > math.abs(dir.Y) then
                     local sign = (dir.X > 0) and 1 or -1
@@ -783,7 +766,6 @@ do
                     edgeY = center.Y + sign * (viewportSize.Y/2 - 10)
                     edgeX = center.X + (dir.X / math.abs(dir.Y)) * (viewportSize.Y/2 - 10)
                 end
-                -- Mostrar flecha en esa posición
                 local bestArrow = nil
                 local bestDist = math.huge
                 for i, arr in ipairs(offscreenIndicators) do
@@ -811,7 +793,6 @@ do
         -- ====== OVERLAY 2D (nombre, distancia, arma, health) ======
         noTargetLabel.Visible = false
 
-        -- Nombre
         if S.NameEnabled then
             nameLabel.Text = currentTarget.Name
             nameLabel.TextColor3 = S.NameColor
@@ -824,7 +805,6 @@ do
             nameShadow.Visible = false
         end
 
-        -- Distancia
         if S.DistanceEnabled then
             distLabel.Text = dist .. " m"
             distLabel.Visible = true
@@ -835,7 +815,6 @@ do
             distShadow.Visible = false
         end
 
-        -- Arma
         if S.WeaponEnabled then
             local tool = char:FindFirstChildOfClass("Tool")
             local weaponName = tool and tool.Name or ""
@@ -857,7 +836,6 @@ do
             weapShadow.Visible = false
         end
 
-        -- Health bar
         if S.HealthBarEnabled then
             hbBg.Visible = true
             hbFill.Size = UDim2.new(1, -2, healthPct, 0)
@@ -952,5 +930,5 @@ do
         end
     end
 
-    print("=== ESP PREVIEW PANEL CON TODAS LAS MEJORAS CARGADO ===")
+    print("=== ESP PREVIEW PANEL CORREGIDO CARGADO ===")
 end
