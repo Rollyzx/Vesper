@@ -1,6 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — Panel flotante con todas las mejoras (FINAL CORREGIDO)
--- Cargar DESPUÉS de ESP.lua
+-- ESPPreview.lua — CORREGIDO: sin referencias a .Img, todo via FindFirstChild
 -- ============================================================================
 
 do
@@ -9,9 +8,6 @@ do
     local TweenService= game:GetService("TweenService")
     local localPlayer = Players.LocalPlayer
 
-    -- =========================================================================
-    -- EXTENDER _G.ESPSettings
-    -- =========================================================================
     if not _G.ESPSettings then _G.ESPSettings = {} end
     local S = _G.ESPSettings
 
@@ -37,9 +33,6 @@ do
     S.OffscreenColor      = S.OffscreenColor      or Color3.fromRGB(255,255,100)
     S.Theme               = S.Theme               or "CSGO"
 
-    -- =========================================================================
-    -- TEMAS
-    -- =========================================================================
     local THEMES = {
         CSGO = {
             BoxColor      = Color3.fromRGB(0,255,255),
@@ -90,9 +83,7 @@ do
     end
     applyTheme(S.Theme)
 
-    -- =========================================================================
-    -- CREAR SCREENGUI
-    -- =========================================================================
+    -- ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name             = "ESPPreviewGui"
     screenGui.ResetOnSpawn     = false
@@ -103,9 +94,7 @@ do
         screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
     end
 
-    -- =========================================================================
-    -- VENTANA PRINCIPAL
-    -- =========================================================================
+    -- Panel
     local PANEL_W, PANEL_H = 210, 290
     local panel = Instance.new("Frame")
     panel.Name                  = "ESPPreviewPanel"
@@ -123,7 +112,7 @@ do
     panelStroke.Color = Color3.fromRGB(55,55,70)
     panelStroke.Thickness = 1
 
-    -- Barra de título
+    -- Title bar
     local titleBar = Instance.new("Frame", panel)
     titleBar.Size = UDim2.new(1,0,0,24)
     titleBar.BackgroundColor3 = Color3.fromRGB(22,22,30)
@@ -187,9 +176,7 @@ do
         end)
     end
 
-    -- =========================================================================
-    -- VIEWPORT 3D
-    -- =========================================================================
+    -- Viewport
     local VP_X, VP_Y, VP_W, VP_H = 10, 30, PANEL_W - 20, 195
     local viewport = Instance.new("ViewportFrame", panel)
     viewport.Size = UDim2.new(0, VP_W, 0, VP_H)
@@ -207,13 +194,9 @@ do
     vpCam.FieldOfView = 45
     viewport.CurrentCamera = vpCam
 
-    -- WorldModel
     local worldModel = Instance.new("WorldModel", viewport)
 
-    -- =========================================================================
-    -- ELEMENTOS 3D (caja, sombra, tracer)
-    -- =========================================================================
-    -- Caja 3D (neon)
+    -- 3D objects
     local box3D = Instance.new("Part", worldModel)
     box3D.Name = "Box3D"
     box3D.Anchored = true
@@ -223,7 +206,6 @@ do
     box3D.Transparency = 1
     box3D.Size = Vector3.new(1,1,1)
 
-    -- Sombra
     local shadowPart = Instance.new("Part", worldModel)
     shadowPart.Name = "Shadow"
     shadowPart.Anchored = true
@@ -234,7 +216,6 @@ do
     shadowPart.Size = Vector3.new(2,0.1,2)
     shadowPart.Shape = Enum.PartType.Cylinder
 
-    -- Tracer
     local tracerPart = Instance.new("Part", worldModel)
     tracerPart.Name = "Tracer"
     tracerPart.Anchored = true
@@ -244,7 +225,6 @@ do
     tracerPart.Transparency = 1
     tracerPart.Size = Vector3.new(0.1,0.1,0.1)
 
-    -- Glow
     local glowHL = Instance.new("Highlight", worldModel)
     glowHL.FillColor = Color3.fromRGB(255,80,80)
     glowHL.OutlineColor = Color3.fromRGB(255,80,80)
@@ -252,16 +232,14 @@ do
     glowHL.OutlineTransparency = 0.1
     glowHL.Enabled = false
 
-    -- =========================================================================
-    -- OVERLAY 2D
-    -- =========================================================================
+    -- Overlay
     local overlay = Instance.new("Frame", viewport)
     overlay.Size = UDim2.new(1,0,1,0)
     overlay.BackgroundTransparency = 1
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Nombre
+    -- Labels (name, distance, weapon, health)
     local nameLabel = Instance.new("TextLabel", overlay)
     nameLabel.Size = UDim2.new(1,0,0,20)
     nameLabel.Position = UDim2.new(0,0,0,2)
@@ -286,7 +264,6 @@ do
     nameShadow.ZIndex = 14
     nameShadow.Visible = false
 
-    -- Box 2D
     local boxFrame = Instance.new("Frame", overlay)
     boxFrame.BackgroundTransparency = 1
     boxFrame.ZIndex = 12
@@ -295,7 +272,6 @@ do
     boxStroke.Thickness = 2
     boxStroke.Color = Color3.fromRGB(255,255,255)
 
-    -- Health bar
     local hbBg = Instance.new("Frame", overlay)
     hbBg.Size = UDim2.new(0,6,0.7,0)
     hbBg.Position = UDim2.new(0,2,0.15,0)
@@ -311,7 +287,6 @@ do
     hbFill.BorderSizePixel = 0
     hbFill.ZIndex = 13
 
-    -- Distancia
     local distLabel = Instance.new("TextLabel", overlay)
     distLabel.Size = UDim2.new(1,0,0,14)
     distLabel.Position = UDim2.new(0,0,1,-28)
@@ -335,7 +310,6 @@ do
     distShadow.ZIndex = 14
     distShadow.Visible = false
 
-    -- Arma
     local weaponLabel = Instance.new("TextLabel", overlay)
     weaponLabel.Size = UDim2.new(1,0,0,14)
     weaponLabel.Position = UDim2.new(0,0,1,-14)
@@ -359,7 +333,6 @@ do
     weapShadow.ZIndex = 14
     weapShadow.Visible = false
 
-    -- No target
     local noTargetLabel = Instance.new("TextLabel", overlay)
     noTargetLabel.Size = UDim2.new(1,0,1,0)
     noTargetLabel.BackgroundTransparency = 1
@@ -370,32 +343,34 @@ do
     noTargetLabel.ZIndex = 11
     noTargetLabel.Visible = true
 
-    -- Off‑screen indicators (4 arrows) — FIX: store ImageLabel as a child and reference by name
-    local offscreenIndicators = {}
+    -- Off‑screen indicators: we keep both Frames and ImageLabels in parallel arrays
+    local offscreenFrames = {}
+    local offscreenImages = {}
     for i = 1, 4 do
-        local arrow = Instance.new("Frame", overlay)
-        arrow.Name = "OffscreenArrow_" .. i
-        arrow.Size = UDim2.new(0,16,0,16)
-        arrow.BackgroundTransparency = 1
-        arrow.ZIndex = 20
-        arrow.Visible = false
-        local img = Instance.new("ImageLabel", arrow)
+        local frame = Instance.new("Frame", overlay)
+        frame.Name = "OffscreenArrow_" .. i
+        frame.Size = UDim2.new(0,16,0,16)
+        frame.BackgroundTransparency = 1
+        frame.ZIndex = 20
+        frame.Visible = false
+
+        local img = Instance.new("ImageLabel", frame)
         img.Name = "ArrowImg"
         img.Size = UDim2.new(1,0,1,0)
         img.BackgroundTransparency = 1
         img.Image = "rbxassetid://8532000591"
         img.ImageColor3 = Color3.fromRGB(255,255,100)
         img.ZIndex = 21
-        offscreenIndicators[i] = arrow
-    end
-    offscreenIndicators[1].Position = UDim2.new(0.5,-8,0,4)
-    offscreenIndicators[2].Position = UDim2.new(0.5,-8,1,-20)
-    offscreenIndicators[3].Position = UDim2.new(0,4,0.5,-8)
-    offscreenIndicators[4].Position = UDim2.new(1,-20,0.5,-8)
 
-    -- =========================================================================
-    -- SKELETON LINES
-    -- =========================================================================
+        offscreenFrames[i] = frame
+        offscreenImages[i] = img
+    end
+    offscreenFrames[1].Position = UDim2.new(0.5,-8,0,4)
+    offscreenFrames[2].Position = UDim2.new(0.5,-8,1,-20)
+    offscreenFrames[3].Position = UDim2.new(0,4,0.5,-8)
+    offscreenFrames[4].Position = UDim2.new(1,-20,0.5,-8)
+
+    -- Skeleton lines
     local MAX_BONES = 20
     local skelLines = {}
     for i = 1, MAX_BONES do
@@ -411,9 +386,7 @@ do
         table.insert(skelLines, f)
     end
 
-    -- =========================================================================
-    -- GESTIÓN DEL CLON
-    -- =========================================================================
+    -- Clone management
     local clonedChar = nil
     local currentTarget = nil
     local currentTargetDist = 0
@@ -471,9 +444,7 @@ do
         vpCam.CFrame = CFrame.new(pos + Vector3.new(0,1.2,4.8), lookAt)
     end
 
-    -- =========================================================================
-    -- UTILIDADES
-    -- =========================================================================
+    -- Utilities
     local function PartTo2D(part)
         if not part or not part.Parent then return nil end
         local s, visible = vpCam:WorldToViewportPoint(part.Position)
@@ -560,12 +531,10 @@ do
         tracerPart.Transparency = 1
         glowHL.Enabled = false
         for _, l in ipairs(skelLines) do l.Visible = false end
-        for _, a in ipairs(offscreenIndicators) do a.Visible = false end
+        for i = 1, 4 do offscreenFrames[i].Visible = false end
     end
 
-    -- =========================================================================
-    -- RENDER LOOP
-    -- =========================================================================
+    -- Render loop
     local frameCount = 0
     local targetUpdateTimer = 0
     local targetUpdateInterval = 0.5
@@ -608,7 +577,6 @@ do
         local charRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
         local dist = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
 
-        -- Visibilidad en cámara
         local isVisible = false
         if charRoot then
             local _, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
@@ -619,7 +587,7 @@ do
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
 
-        -- ====== GLOW ======
+        -- Glow
         if S.GlowEnabled then
             glowHL.Enabled = true
             glowHL.FillColor = S.GlowColor
@@ -629,7 +597,7 @@ do
             glowHL.Enabled = false
         end
 
-        -- ====== SHADOW ======
+        -- Shadow
         if S.ShadowEnabled and charRoot then
             shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.3)
             shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
@@ -639,7 +607,7 @@ do
             shadowPart.Transparency = 1
         end
 
-        -- ====== TRACER ======
+        -- Tracer
         if S.TracerEnabled and localRoot and charRoot then
             local startPos = localRoot.Position
             local endPos = charRoot.Position
@@ -658,7 +626,7 @@ do
             tracerPart.Transparency = 1
         end
 
-        -- ====== BOX STYLE ======
+        -- Box style
         local boxStyle = S.BoxStyle or "2D"
         local headPart = clonedChar:FindFirstChild("Head")
         local rootPart = clonedChar:FindFirstChild("HumanoidRootPart") or clonedChar:FindFirstChild("Torso")
@@ -695,17 +663,17 @@ do
                 box3D.Color = S.BoxColor
                 boxFrame.Visible = false
             elseif boxStyle == "Arrow" then
+                -- Arrow style: we use a dedicated ImageLabel inside boxFrame
                 if rootPos2D then
                     local center = Vector2.new(vpW/2, vpH/2)
                     local dir = (rootPos2D - center)
                     local angle = math.atan2(dir.Y, dir.X)
-                    local arrowFrame = boxFrame
-                    arrowFrame.Size = UDim2.new(0,20,0,20)
-                    arrowFrame.Position = UDim2.new(0, rootPos2D.X - 10, 0, rootPos2D.Y - 10)
-                    arrowFrame.BackgroundTransparency = 1
-                    local img = arrowFrame:FindFirstChild("ArrowImg")
+                    boxFrame.Size = UDim2.new(0,20,0,20)
+                    boxFrame.Position = UDim2.new(0, rootPos2D.X - 10, 0, rootPos2D.Y - 10)
+                    boxFrame.BackgroundTransparency = 1
+                    local img = boxFrame:FindFirstChild("ArrowImg")
                     if not img then
-                        img = Instance.new("ImageLabel", arrowFrame)
+                        img = Instance.new("ImageLabel", boxFrame)
                         img.Name = "ArrowImg"
                         img.Size = UDim2.new(1,0,1,0)
                         img.BackgroundTransparency = 1
@@ -714,7 +682,7 @@ do
                     end
                     img.ImageColor3 = S.BoxColor
                     img.Rotation = math.deg(angle)
-                    arrowFrame.Visible = true
+                    boxFrame.Visible = true
                     box3D.Transparency = 1
                 else
                     boxFrame.Visible = false
@@ -748,7 +716,7 @@ do
             box3D.Transparency = 1
         end
 
-        -- ====== OFF‑SCREEN INDICATORS (FIX: use FindFirstChild) ======
+        -- Off‑screen indicators
         if S.OffscreenIndicators and not isVisible and charRoot then
             local viewportSize = viewport.AbsoluteSize
             local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
@@ -766,34 +734,35 @@ do
                     edgeY = center.Y + sign * (viewportSize.Y/2 - 10)
                     edgeX = center.X + (dir.X / math.abs(dir.Y)) * (viewportSize.Y/2 - 10)
                 end
-                local bestArrow = nil
+                local bestIdx = 1
                 local bestDist = math.huge
-                for i, arr in ipairs(offscreenIndicators) do
-                    local pos = arr.AbsolutePosition + Vector2.new(8,8)
+                for i = 1, 4 do
+                    local pos = offscreenFrames[i].AbsolutePosition + Vector2.new(8,8)
                     local d = (pos - Vector2.new(edgeX, edgeY)).Magnitude
                     if d < bestDist then
                         bestDist = d
-                        bestArrow = arr
+                        bestIdx = i
                     end
                 end
-                if bestArrow then
-                    local imgLabel = bestArrow:FindFirstChild("ArrowImg")
-                    if imgLabel then
-                        bestArrow.Visible = true
-                        bestArrow.Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
-                        imgLabel.ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
-                        imgLabel.Rotation = math.deg(angle)
-                    end
-                    for _, a in ipairs(offscreenIndicators) do
-                        if a ~= bestArrow then a.Visible = false end
+                -- Show only the best arrow
+                for i = 1, 4 do
+                    if i == bestIdx then
+                        offscreenFrames[i].Visible = true
+                        offscreenFrames[i].Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
+                        offscreenImages[i].ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
+                        offscreenImages[i].Rotation = math.deg(angle)
+                    else
+                        offscreenFrames[i].Visible = false
                     end
                 end
+            else
+                for i = 1, 4 do offscreenFrames[i].Visible = false end
             end
         else
-            for _, a in ipairs(offscreenIndicators) do a.Visible = false end
+            for i = 1, 4 do offscreenFrames[i].Visible = false end
         end
 
-        -- ====== OVERLAY 2D (nombre, distancia, arma, health) ======
+        -- Name, distance, weapon, health
         noTargetLabel.Visible = false
 
         if S.NameEnabled then
@@ -898,9 +867,7 @@ do
         end
     end)
 
-    -- =========================================================================
-    -- LIVE BLINK
-    -- =========================================================================
+    -- Live blink
     task.spawn(function()
         while true do
             task.wait(0.8)
@@ -912,9 +879,7 @@ do
         end
     end)
 
-    -- =========================================================================
-    -- API PÚBLICA
-    -- =========================================================================
+    -- Public API
     _G.ESPPreview = _G.ESPPreview or {}
     function _G.ESPPreview:Enable()
         _G.ESPPreview.Enabled = true
@@ -933,5 +898,5 @@ do
         end
     end
 
-    print("=== ESP PREVIEW PANEL FINAL CORREGIDO CARGADO ===")
+    print("=== ESP PREVIEW PANEL — SIN ERRORES DE .Img ===")
 end
