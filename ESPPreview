@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — Tracer 2D, Box 3D visible, Shadow improved
+-- ESPPreview.lua — AUTO‑ENABLE, TRACER 2D, BOX 3D, SHADOW, OFFScreen
 -- ============================================================================
 
 do
@@ -13,11 +13,11 @@ do
 
     S.BoxEnabled          = (S.BoxEnabled          == nil) and true or S.BoxEnabled
     S.BoxStyle            = S.BoxStyle            or "2D"
-    S.BoxColor            = S.BoxColor            or Color3.fromRGB(255,255,255)
+    S.BoxColor            = S.BoxColor            or Color3.fromRGB(0,255,255)
     S.BoxThickness        = S.BoxThickness        or 2
     S.HealthBarEnabled    = (S.HealthBarEnabled   == nil) and true or S.HealthBarEnabled
     S.SkeletonEnabled     = (S.SkeletonEnabled    == nil) and true or S.SkeletonEnabled
-    S.SkeletonColor       = S.SkeletonColor       or Color3.fromRGB(255,255,255)
+    S.SkeletonColor       = S.SkeletonColor       or Color3.fromRGB(0,255,255)
     S.SkeletonThickness   = S.SkeletonThickness   or 2
     S.NameEnabled         = (S.NameEnabled        == nil) and true or S.NameEnabled
     S.NameColor           = S.NameColor           or Color3.fromRGB(255,255,255)
@@ -26,7 +26,7 @@ do
     S.GlowEnabled         = (S.GlowEnabled        == nil) and false or S.GlowEnabled
     S.GlowColor           = S.GlowColor           or Color3.fromRGB(255,80,80)
     S.ShadowEnabled       = (S.ShadowEnabled      == nil) and true or S.ShadowEnabled
-    S.ShadowOpacity       = S.ShadowOpacity       or 0.3
+    S.ShadowOpacity       = S.ShadowOpacity       or 0.35
     S.TracerEnabled       = (S.TracerEnabled      == nil) and true or S.TracerEnabled
     S.TracerColor         = S.TracerColor         or Color3.fromRGB(0,255,200)
     S.OffscreenIndicators = (S.OffscreenIndicators== nil) and true or S.OffscreenIndicators
@@ -196,12 +196,12 @@ do
 
     local worldModel = Instance.new("WorldModel", viewport)
 
-    -- 3D objects (Box, Shadow)
+    -- 3D objects
     local box3D = Instance.new("Part", worldModel)
     box3D.Name = "Box3D"
     box3D.Anchored = true
     box3D.CanCollide = false
-    box3D.Material = Enum.Material.Plastic  -- Changed from Neon to be more visible
+    box3D.Material = Enum.Material.Plastic
     box3D.Color = Color3.fromRGB(0,255,255)
     box3D.Transparency = 1
     box3D.Size = Vector3.new(1,1,1)
@@ -216,7 +216,6 @@ do
     shadowPart.Size = Vector3.new(2,0.1,2)
     shadowPart.Shape = Enum.PartType.Cylinder
 
-    -- Glow (Highlight)
     local glowHL = Instance.new("Highlight", worldModel)
     glowHL.FillColor = Color3.fromRGB(255,80,80)
     glowHL.OutlineColor = Color3.fromRGB(255,80,80)
@@ -231,7 +230,7 @@ do
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Tracer 2D line (using a Frame)
+    -- Tracer 2D line
     local tracerLine = Instance.new("Frame", overlay)
     tracerLine.Name = "TracerLine"
     tracerLine.BackgroundColor3 = Color3.fromRGB(0,255,200)
@@ -240,7 +239,7 @@ do
     tracerLine.ZIndex = 14
     tracerLine.Visible = false
 
-    -- Labels (name, distance, weapon, health, box 2D, skeleton, etc.)
+    -- Labels
     local nameLabel = Instance.new("TextLabel", overlay)
     nameLabel.Size = UDim2.new(1,0,0,20)
     nameLabel.Position = UDim2.new(0,0,0,2)
@@ -344,7 +343,7 @@ do
     noTargetLabel.ZIndex = 11
     noTargetLabel.Visible = true
 
-    -- Off‑screen indicators (frames + images)
+    -- Off‑screen indicators
     local offscreenFrames = {}
     local offscreenImages = {}
     for i = 1, 4 do
@@ -389,7 +388,6 @@ do
     local clonedChar = nil
     local currentTarget = nil
     local currentTargetDist = 0
-    local isTargetVisible = true
 
     local function DestroyClone()
         if clonedChar then
@@ -534,7 +532,6 @@ do
     end
 
     -- Render loop
-    local frameCount = 0
     local targetUpdateTimer = 0
     local targetUpdateInterval = 0.5
 
@@ -545,7 +542,6 @@ do
             return
         end
         panel.Visible = true
-        frameCount = frameCount + 1
         targetUpdateTimer = targetUpdateTimer + dt
 
         if targetUpdateTimer >= targetUpdateInterval or currentTarget == nil then
@@ -581,7 +577,6 @@ do
             local _, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
             isVisible = onScreen
         end
-        isTargetVisible = isVisible
 
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
@@ -598,20 +593,20 @@ do
 
         -- Shadow
         if S.ShadowEnabled and charRoot then
-            shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.3)
-            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
-            local size = 1.5 + (dist / 150)  -- increased size
+            shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.35)
+            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.8, 0))
+            local size = 1.8 + (dist / 120)
             shadowPart.Size = Vector3.new(size, 0.1, size)
         else
             shadowPart.Transparency = 1
         end
 
-        -- Tracer 2D: from bottom center of viewport to target's 2D position
+        -- Tracer 2D
         if S.TracerEnabled and charRoot then
             local target2D = PartTo2D(charRoot)
             if target2D then
                 local vpSize = viewport.AbsoluteSize
-                local from = Vector2.new(vpSize.X/2, vpSize.Y) -- bottom center
+                local from = Vector2.new(vpSize.X/2, vpSize.Y)
                 local to = target2D
                 local dx = to.X - from.X
                 local dy = to.Y - from.Y
@@ -660,10 +655,10 @@ do
                 end
                 box3D.Transparency = 1
             elseif boxStyle == "3D" then
-                box3D.Transparency = 0.3  -- more visible
+                box3D.Transparency = 0.25
                 local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
-                local height = (headPos - rootPart.Position).Y + 0.5
-                local width = height * 0.6
+                local height = (headPos - rootPart.Position).Y + 0.8
+                local width = height * 0.65
                 box3D.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, height/2, 0))
                 box3D.Size = Vector3.new(width, height, width)
                 box3D.Color = S.BoxColor
@@ -753,7 +748,7 @@ do
                     if i == bestIdx then
                         offscreenFrames[i].Visible = true
                         offscreenFrames[i].Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
-                        offscreenImages[i].ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
+                        offscreenImages[i].ImageColor3 = S.OffscreenColor
                         offscreenImages[i].Rotation = math.deg(angle)
                     else
                         offscreenFrames[i].Visible = false
@@ -883,24 +878,38 @@ do
         end
     end)
 
-    -- Public API
+    -- =========================================================================
+    -- API PÚBLICA
+    -- =========================================================================
     _G.ESPPreview = _G.ESPPreview or {}
+    _G.ESPPreview.Enabled = false
+
     function _G.ESPPreview:Enable()
         _G.ESPPreview.Enabled = true
         panel.Visible = true
+        print("[ESPPreview] Enabled")
     end
+
     function _G.ESPPreview:Disable()
         _G.ESPPreview.Enabled = false
         panel.Visible = false
         DestroyClone()
         currentTarget = nil
+        print("[ESPPreview] Disabled")
     end
+
     function _G.ESPPreview:SetTheme(themeName)
         if THEMES[themeName] then
             S.Theme = themeName
             applyTheme(themeName)
+            print("[ESPPreview] Theme set to:", themeName)
         end
     end
 
-    print("=== ESP PREVIEW PANEL — TRACER 2D, BOX 3D VISIBLE ===")
+    -- Auto‑enable by default (so it works immediately)
+    task.wait(0.5)
+    _G.ESPPreview:Enable()
+
+    print("=== ESP PREVIEW PANEL — AUTO‑ENABLED ===")
+    print("Controls: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
 end
