@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — AUTO‑ENABLE, TRACER 2D, BOX 3D, SHADOW, OFFScreen
+-- ESPPreview.lua — CORREGIDO CON LOS CAMBIOS DE DJ
 -- ============================================================================
 
 do
@@ -593,9 +593,9 @@ do
 
         -- Shadow
         if S.ShadowEnabled and charRoot then
-            shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.35)
-            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.8, 0))
-            local size = 1.8 + (dist / 120)
+            shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.3)
+            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
+            local size = 1.5 + (dist / 150)
             shadowPart.Size = Vector3.new(size, 0.1, size)
         else
             shadowPart.Transparency = 1
@@ -655,10 +655,10 @@ do
                 end
                 box3D.Transparency = 1
             elseif boxStyle == "3D" then
-                box3D.Transparency = 0.25
+                box3D.Transparency = 0.3
                 local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
-                local height = (headPos - rootPart.Position).Y + 0.8
-                local width = height * 0.65
+                local height = (headPos - rootPart.Position).Y + 0.5
+                local width = height * 0.6
                 box3D.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, height/2, 0))
                 box3D.Size = Vector3.new(width, height, width)
                 box3D.Color = S.BoxColor
@@ -748,7 +748,7 @@ do
                     if i == bestIdx then
                         offscreenFrames[i].Visible = true
                         offscreenFrames[i].Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
-                        offscreenImages[i].ImageColor3 = S.OffscreenColor
+                        offscreenImages[i].ImageColor3 = S.OffscreenColor or Color3.fromRGB(255,255,100)
                         offscreenImages[i].Rotation = math.deg(angle)
                     else
                         offscreenFrames[i].Visible = false
@@ -878,16 +878,13 @@ do
         end
     end)
 
-    -- =========================================================================
-    -- API PÚBLICA
-    -- =========================================================================
+    -- API
     _G.ESPPreview = _G.ESPPreview or {}
     _G.ESPPreview.Enabled = false
 
     function _G.ESPPreview:Enable()
         _G.ESPPreview.Enabled = true
         panel.Visible = true
-        print("[ESPPreview] Enabled")
     end
 
     function _G.ESPPreview:Disable()
@@ -895,21 +892,16 @@ do
         panel.Visible = false
         DestroyClone()
         currentTarget = nil
-        print("[ESPPreview] Disabled")
     end
 
     function _G.ESPPreview:SetTheme(themeName)
         if THEMES[themeName] then
             S.Theme = themeName
             applyTheme(themeName)
-            print("[ESPPreview] Theme set to:", themeName)
         end
     end
 
-    -- Auto‑enable by default (so it works immediately)
     task.wait(0.5)
     _G.ESPPreview:Enable()
-
-    print("=== ESP PREVIEW PANEL — AUTO‑ENABLED ===")
-    print("Controls: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
+    print("=== ESP PREVIEW PANEL — CORREGIDO CON CAMBIOS DE DJ ===")
 end
