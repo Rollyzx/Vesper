@@ -103,6 +103,31 @@ espSection:CreateToggle({
         _G.ESPSettings.SkeletonEnabled = enabled
     end
 })
+espSection:CreateToggle({
+    Name = "Glow Effect",
+    State = _G.ESPSettings.GlowEnabled,
+    Callback = function(v) _G.ESPSettings.GlowEnabled = v end,
+    Colorpickers = {{ State = _G.ESPSettings.GlowColor, Callback = function(c) _G.ESPSettings.GlowColor = c end }}
+})
+espSection:CreateToggle({
+    Name = "Ground Shadow",
+    State = _G.ESPSettings.ShadowEnabled,
+    Callback = function(v) _G.ESPSettings.ShadowEnabled = v end
+})
+espSection:CreateToggle({
+    Name = "Off‑screen Indicators",
+    State = _G.ESPSettings.OffscreenIndicators,
+    Callback = function(v) _G.ESPSettings.OffscreenIndicators = v end
+})
+espSection:CreateDropdown({
+    Name = "Theme",
+    State = { "CSGO", "Valorant", "Default" },
+    Options = {"CSGO", "Valorant", "Default"},
+    Callback = function(index)
+        local themes = {"CSGO", "Valorant", "Default"}
+        _G.ESPPreview:SetTheme(themes[index])
+    end
+})
 
 -- ============================================================================
 -- CAMBIAR A SUBTAB 2: OBJECT ESP
