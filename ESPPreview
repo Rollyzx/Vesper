@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — CORREGIDO: sin referencias a .Img, todo via FindFirstChild
+-- ESPPreview.lua — Tracer 2D, Box 3D visible, Shadow improved
 -- ============================================================================
 
 do
@@ -196,12 +196,12 @@ do
 
     local worldModel = Instance.new("WorldModel", viewport)
 
-    -- 3D objects
+    -- 3D objects (Box, Shadow)
     local box3D = Instance.new("Part", worldModel)
     box3D.Name = "Box3D"
     box3D.Anchored = true
     box3D.CanCollide = false
-    box3D.Material = Enum.Material.Neon
+    box3D.Material = Enum.Material.Plastic  -- Changed from Neon to be more visible
     box3D.Color = Color3.fromRGB(0,255,255)
     box3D.Transparency = 1
     box3D.Size = Vector3.new(1,1,1)
@@ -216,15 +216,7 @@ do
     shadowPart.Size = Vector3.new(2,0.1,2)
     shadowPart.Shape = Enum.PartType.Cylinder
 
-    local tracerPart = Instance.new("Part", worldModel)
-    tracerPart.Name = "Tracer"
-    tracerPart.Anchored = true
-    tracerPart.CanCollide = false
-    tracerPart.Material = Enum.Material.Neon
-    tracerPart.Color = Color3.fromRGB(0,255,200)
-    tracerPart.Transparency = 1
-    tracerPart.Size = Vector3.new(0.1,0.1,0.1)
-
+    -- Glow (Highlight)
     local glowHL = Instance.new("Highlight", worldModel)
     glowHL.FillColor = Color3.fromRGB(255,80,80)
     glowHL.OutlineColor = Color3.fromRGB(255,80,80)
@@ -239,7 +231,16 @@ do
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Labels (name, distance, weapon, health)
+    -- Tracer 2D line (using a Frame)
+    local tracerLine = Instance.new("Frame", overlay)
+    tracerLine.Name = "TracerLine"
+    tracerLine.BackgroundColor3 = Color3.fromRGB(0,255,200)
+    tracerLine.BorderSizePixel = 0
+    tracerLine.AnchorPoint = Vector2.new(0,0.5)
+    tracerLine.ZIndex = 14
+    tracerLine.Visible = false
+
+    -- Labels (name, distance, weapon, health, box 2D, skeleton, etc.)
     local nameLabel = Instance.new("TextLabel", overlay)
     nameLabel.Size = UDim2.new(1,0,0,20)
     nameLabel.Position = UDim2.new(0,0,0,2)
@@ -343,7 +344,7 @@ do
     noTargetLabel.ZIndex = 11
     noTargetLabel.Visible = true
 
-    -- Off‑screen indicators: we keep both Frames and ImageLabels in parallel arrays
+    -- Off‑screen indicators (frames + images)
     local offscreenFrames = {}
     local offscreenImages = {}
     for i = 1, 4 do
@@ -353,7 +354,6 @@ do
         frame.BackgroundTransparency = 1
         frame.ZIndex = 20
         frame.Visible = false
-
         local img = Instance.new("ImageLabel", frame)
         img.Name = "ArrowImg"
         img.Size = UDim2.new(1,0,1,0)
@@ -361,7 +361,6 @@ do
         img.Image = "rbxassetid://8532000591"
         img.ImageColor3 = Color3.fromRGB(255,255,100)
         img.ZIndex = 21
-
         offscreenFrames[i] = frame
         offscreenImages[i] = img
     end
@@ -399,9 +398,9 @@ do
         end
         box3D.Transparency = 1
         shadowPart.Transparency = 1
-        tracerPart.Transparency = 1
         glowHL.Enabled = false
         glowHL.Adornee = nil
+        tracerLine.Visible = false
     end
 
     local function CloneCharacter(char)
@@ -528,8 +527,8 @@ do
         noTargetLabel.Visible = true
         box3D.Transparency = 1
         shadowPart.Transparency = 1
-        tracerPart.Transparency = 1
         glowHL.Enabled = false
+        tracerLine.Visible = false
         for _, l in ipairs(skelLines) do l.Visible = false end
         for i = 1, 4 do offscreenFrames[i].Visible = false end
     end
@@ -601,29 +600,36 @@ do
         if S.ShadowEnabled and charRoot then
             shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.3)
             shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.5, 0))
-            local size = 1.2 + (dist / 200)
+            local size = 1.5 + (dist / 150)  -- increased size
             shadowPart.Size = Vector3.new(size, 0.1, size)
         else
             shadowPart.Transparency = 1
         end
 
-        -- Tracer
-        if S.TracerEnabled and localRoot and charRoot then
-            local startPos = localRoot.Position
-            local endPos = charRoot.Position
-            local mid = (startPos + endPos) / 2
-            local dir = (endPos - startPos)
-            local length = dir.Magnitude
-            if length > 0.5 then
-                tracerPart.Transparency = 0.4 + (dist / 1000) * 0.3
-                tracerPart.CFrame = CFrame.lookAt(mid, endPos) * CFrame.Angles(math.pi/2,0,0)
-                tracerPart.Size = Vector3.new(0.08, length, 0.08)
-                tracerPart.Color = S.TracerColor
+        -- Tracer 2D: from bottom center of viewport to target's 2D position
+        if S.TracerEnabled and charRoot then
+            local target2D = PartTo2D(charRoot)
+            if target2D then
+                local vpSize = viewport.AbsoluteSize
+                local from = Vector2.new(vpSize.X/2, vpSize.Y) -- bottom center
+                local to = target2D
+                local dx = to.X - from.X
+                local dy = to.Y - from.Y
+                local len = math.sqrt(dx*dx + dy*dy)
+                if len > 2 then
+                    tracerLine.Size = UDim2.new(0, len, 0, 2)
+                    tracerLine.Position = UDim2.new(0, from.X, 0, from.Y)
+                    tracerLine.Rotation = math.deg(math.atan2(dy, dx))
+                    tracerLine.BackgroundColor3 = S.TracerColor
+                    tracerLine.Visible = true
+                else
+                    tracerLine.Visible = false
+                end
             else
-                tracerPart.Transparency = 1
+                tracerLine.Visible = false
             end
         else
-            tracerPart.Transparency = 1
+            tracerLine.Visible = false
         end
 
         -- Box style
@@ -654,7 +660,7 @@ do
                 end
                 box3D.Transparency = 1
             elseif boxStyle == "3D" then
-                box3D.Transparency = 0.5 + (dist / 1000) * 0.3
+                box3D.Transparency = 0.3  -- more visible
                 local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
                 local height = (headPos - rootPart.Position).Y + 0.5
                 local width = height * 0.6
@@ -663,7 +669,6 @@ do
                 box3D.Color = S.BoxColor
                 boxFrame.Visible = false
             elseif boxStyle == "Arrow" then
-                -- Arrow style: we use a dedicated ImageLabel inside boxFrame
                 if rootPos2D then
                     local center = Vector2.new(vpW/2, vpH/2)
                     local dir = (rootPos2D - center)
@@ -744,7 +749,6 @@ do
                         bestIdx = i
                     end
                 end
-                -- Show only the best arrow
                 for i = 1, 4 do
                     if i == bestIdx then
                         offscreenFrames[i].Visible = true
@@ -898,5 +902,5 @@ do
         end
     end
 
-    print("=== ESP PREVIEW PANEL — SIN ERRORES DE .Img ===")
+    print("=== ESP PREVIEW PANEL — TRACER 2D, BOX 3D VISIBLE ===")
 end
