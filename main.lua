@@ -4,6 +4,7 @@
 
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/GUI_Core.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/Vesper/refs/heads/main/modules/ESP.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Rollyzx/TS/refs/heads/main/ESPPreview.lua"))()
 
 	local window = library:CreateWindow({})
 	--
@@ -376,6 +377,16 @@ otheresp:CreateToggle({
 			_G.RadarSettings.Initialized = true
 		end
 		_G.RadarSettings:SetEnabled(enabled)
+	end
+})
+
+otheresp:CreateToggle({
+	Name = "ESP Preview",
+	State = false,
+	Callback = function(enabled)
+		if _G.ESPPreview then
+			if enabled then _G.ESPPreview:Enable() else _G.ESPPreview:Disable() end
+		end
 	end
 })
 
