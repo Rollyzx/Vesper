@@ -390,10 +390,6 @@ do
     end
 
 -- === CLONE MANAGEMENT ===
-local clonedChar = nil
-local currentTarget = nil
-local currentTargetDist = 0
-local isDummy = false
 local cloneAttempts = 0
 local maxCloneAttempts = 3
 local lastCloneAttemptTime = 0
@@ -404,7 +400,6 @@ local function CloneCharacter(char)
         return
     end
     
-    -- Evitar bucles infinitos de clonación
     if cloneAttempts >= maxCloneAttempts then
         local timeElapsed = tick() - lastCloneAttemptTime
         if timeElapsed < 0.5 then
@@ -419,7 +414,6 @@ local function CloneCharacter(char)
     pcall(function()
         DestroyClone()
         
-        -- Verificar que el personaje aún exista antes de clonarlo
         if not char or not char.Parent then
             return
         end
@@ -429,15 +423,12 @@ local function CloneCharacter(char)
             return
         end
         
-        -- Destruir scripts y componentes innecesarios
         for _, v in ipairs(clone:GetDescendants()) do
-            if v:IsA("Script") or v:IsA("LocalScript") or 
-               v:IsA("Sound") or v:IsA("Animator") then
+            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("Animator") then
                 v:Destroy()
             end
         end
         
-        -- Configurar partes del clon
         for _, v in ipairs(clone:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Anchored = true
@@ -624,6 +615,7 @@ local targetUpdateTimer = 0
 local targetUpdateInterval = 0.5
 
 RunService.RenderStepped:Connect(function(dt)
+pcall(function()
     if not _G.ESPPreview or not _G.ESPPreview.Enabled then
         panel.Visible = false
         DestroyClone()
@@ -985,6 +977,7 @@ RunService.RenderStepped:Connect(function(dt)
     else
         for _, l in ipairs(skelLines) do l.Visible = false end
     end
+end)
 end)
 
     -- === LIVE BLINK ===
