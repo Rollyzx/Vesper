@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — CON TODAS LAS CORRECCIONES
+-- ESPPreview.lua — COMPLETAMENTE CORREGIDO
 -- ============================================================================
 
 do
@@ -8,14 +8,7 @@ do
     local TweenService= game:GetService("TweenService")
     local localPlayer = Players.LocalPlayer
 
-    -- === LOGGING INITIAL ===
-    print("[ESPPreview] Players count:", #Players:GetPlayers())
-    print("[ESPPreview] Local player:", localPlayer and localPlayer.Name or "nil")
-
-    if #Players:GetPlayers() <= 1 then
-        warn("[ESPPreview] No hay otros jugadores en el servidor — usando dummy target")
-    end
-
+    -- === EXTENDER SETTINGS ===
     if not _G.ESPSettings then _G.ESPSettings = {} end
     local S = _G.ESPSettings
 
@@ -91,16 +84,7 @@ do
     end
     applyTheme(S.Theme)
 
-    -- === SAFE CALL WRAPPER ===
-    local function safeCall(func, ...)
-        local success, result = pcall(func, ...)
-        if not success then
-            warn("[ESPPreview] Error en llamada segura:", result)
-        end
-        return result
-    end
-
-    -- ScreenGui
+    -- === SCREENGUI ===
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name             = "ESPPreviewGui"
     screenGui.ResetOnSpawn     = false
@@ -111,7 +95,7 @@ do
         screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
     end
 
-    -- Panel
+    -- === PANEL ===
     local PANEL_W, PANEL_H = 210, 290
     local panel = Instance.new("Frame")
     panel.Name                  = "ESPPreviewPanel"
@@ -129,7 +113,7 @@ do
     panelStroke.Color = Color3.fromRGB(55,55,70)
     panelStroke.Thickness = 1
 
-    -- Title bar
+    -- === TITLE BAR ===
     local titleBar = Instance.new("Frame", panel)
     titleBar.Size = UDim2.new(1,0,0,24)
     titleBar.BackgroundColor3 = Color3.fromRGB(22,22,30)
@@ -167,7 +151,7 @@ do
     local liveCorner = Instance.new("UICorner", liveLabel)
     liveCorner.CornerRadius = UDim.new(0,4)
 
-    -- Drag
+    -- === DRAG ===
     do
         local dragging, dragStart, startPos
         titleBar.InputBegan:Connect(function(input)
@@ -193,7 +177,7 @@ do
         end)
     end
 
-    -- Viewport
+    -- === VIEWPORT ===
     local VP_X, VP_Y, VP_W, VP_H = 10, 30, PANEL_W - 20, 195
     local viewport = Instance.new("ViewportFrame", panel)
     viewport.Size = UDim2.new(0, VP_W, 0, VP_H)
@@ -213,7 +197,7 @@ do
 
     local worldModel = Instance.new("WorldModel", viewport)
 
-    -- 3D objects
+    -- === 3D OBJECTS ===
     local box3D = Instance.new("Part", worldModel)
     box3D.Name = "Box3D"
     box3D.Anchored = true
@@ -240,14 +224,14 @@ do
     glowHL.OutlineTransparency = 0.1
     glowHL.Enabled = false
 
-    -- Overlay
+    -- === OVERLAY ===
     local overlay = Instance.new("Frame", viewport)
     overlay.Size = UDim2.new(1,0,1,0)
     overlay.BackgroundTransparency = 1
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Tracer 2D line
+    -- Tracer Line
     local tracerLine = Instance.new("Frame", overlay)
     tracerLine.Name = "TracerLine"
     tracerLine.BackgroundColor3 = Color3.fromRGB(0,255,200)
@@ -405,7 +389,7 @@ do
         table.insert(skelLines, f)
     end
 
-    -- Clone management
+    -- === CLONE MANAGEMENT ===
     local clonedChar = nil
     local currentTarget = nil
     local currentTargetDist = 0
@@ -413,7 +397,7 @@ do
 
     local function DestroyClone()
         if clonedChar then
-            safeCall(function() clonedChar:Destroy() end)
+            pcall(function() clonedChar:Destroy() end)
             clonedChar = nil
         end
         box3D.Transparency = 1
@@ -423,13 +407,13 @@ do
         tracerLine.Visible = false
     end
 
-    -- CORREGIDO: CloneCharacter con pcall y mejor manejo
+    -- SAFE CloneCharacter
     local function CloneCharacter(char)
         if not char or not char.Parent then
             DestroyClone()
             return
         end
-        safeCall(function()
+        pcall(function()
             DestroyClone()
             local clone = char:Clone()
             for _, v in ipairs(clone:GetDescendants()) do
@@ -450,7 +434,7 @@ do
 
     local function SyncClone(original, clone)
         if not (original and clone) then return end
-        safeCall(function()
+        pcall(function()
             for _, origPart in ipairs(original:GetDescendants()) do
                 if origPart:IsA("BasePart") then
                     local clonePart = clone:FindFirstChild(origPart.Name, true)
@@ -471,7 +455,7 @@ do
         vpCam.CFrame = CFrame.new(pos + Vector3.new(0,1.2,4.8), lookAt)
     end
 
-    -- Utilities
+    -- === UTILITIES ===
     local function PartTo2D(part)
         if not part or not part.Parent then return nil end
         local s, visible = vpCam:WorldToViewportPoint(part.Position)
@@ -485,14 +469,11 @@ do
         return low:Lerp(high, pct)
     end
 
-    -- GetNearestEnemy (dummy si no hay)
+    -- === GetNearestEnemy (con dummy) ===
     local function GetNearestEnemy()
         local localChar = localPlayer.Character
         local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
-        if not localRoot then 
-            -- If local player has no character, try using a dummy root at spawn
-            return nil, math.huge 
-        end
+        if not localRoot then return nil, math.huge end
 
         local nearest, nearestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
@@ -510,7 +491,6 @@ do
             end
         end
 
-        -- If no valid enemy, use local player as dummy (if local has character)
         if not nearest then
             if localChar and localChar.Parent then
                 isDummy = true
@@ -568,27 +548,18 @@ do
         end
     end
 
-    -- === NUEVA FUNCIÓN: ShowElements ===
+    -- === ShowElements ===
     local function ShowElements(target)
         if not target then return end
         local char = target.Character
         if not char then return end
 
-        -- Mostrar/ocultar según configuración
         nameLabel.Visible = S.NameEnabled
         distLabel.Visible = S.DistanceEnabled
         weaponLabel.Visible = S.WeaponEnabled
         hbBg.Visible = S.HealthBarEnabled
-
-        -- Box 2D / Arrow / Circle
         boxFrame.Visible = S.BoxEnabled and (S.BoxStyle == "2D" or S.BoxStyle == "Arrow" or S.BoxStyle == "Circle")
-        -- Box 3D
-        if S.BoxEnabled and S.BoxStyle == "3D" then
-            box3D.Transparency = 0.3
-        else
-            box3D.Transparency = 1
-        end
-
+        box3D.Transparency = (S.BoxEnabled and S.BoxStyle == "3D") and 0.3 or 1
         shadowPart.Transparency = S.ShadowEnabled and 1 - (S.ShadowOpacity or 0.35) or 1
         glowHL.Enabled = S.GlowEnabled
         tracerLine.Visible = S.TracerEnabled
@@ -600,7 +571,7 @@ do
         noTargetLabel.Visible = false
     end
 
-    -- === CORRECCIÓN: checkVisibility ===
+    -- === checkVisibility ===
     local function checkVisibility(charRoot)
         if not charRoot then return false end
         local pos2D, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
@@ -623,7 +594,14 @@ do
         for i = 1, 4 do offscreenFrames[i].Visible = false end
     end
 
-    -- Render loop
+    -- === HANDLE NEW PLAYERS ===
+    Players.PlayerAdded:Connect(function(player)
+        -- Force target update on next cycle
+        currentTarget = nil
+        print("[ESPPreview] New player joined:", player.Name)
+    end)
+
+    -- === RENDER LOOP ===
     local targetUpdateTimer = 0
     local targetUpdateInterval = 0.5
 
@@ -636,14 +614,14 @@ do
         panel.Visible = true
         targetUpdateTimer = targetUpdateTimer + dt
 
-        -- Actualizar objetivo
+        -- Update target
         if targetUpdateTimer >= targetUpdateInterval or currentTarget == nil then
             targetUpdateTimer = 0
             local newTarget, dist = GetNearestEnemy()
             if newTarget ~= currentTarget then
                 currentTarget = newTarget
                 currentTargetDist = dist or 0
-                -- ONLY clone if we have a valid character
+                -- ONLY clone if character exists
                 if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
                     CloneCharacter(currentTarget.Character)
                 else
@@ -655,7 +633,7 @@ do
             end
         end
 
-        -- Early exit if no valid target or clone
+        -- VALIDATE target and clone
         if not currentTarget or not currentTarget.Character or not currentTarget.Character.Parent then
             DestroyClone()
             currentTarget = nil
@@ -664,8 +642,8 @@ do
         end
 
         if not clonedChar or not clonedChar.Parent then
-            -- Try to clone again if we have a target but no clone
-            if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
+            -- Try to reclone
+            if currentTarget.Character and currentTarget.Character.Parent then
                 CloneCharacter(currentTarget.Character)
             end
             if not clonedChar or not clonedChar.Parent then
@@ -686,17 +664,15 @@ do
             return
         end
 
-        -- Visibilidad corregida
         local isVisible = checkVisibility(charRoot)
 
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
 
-        -- Mostrar elementos según configuración
+        -- Show elements based on settings
         ShowElements(currentTarget)
 
-        -- Actualizar elementos individuales
-        -- Glow
+        -- === GLOW ===
         if S.GlowEnabled then
             glowHL.Enabled = true
             glowHL.FillColor = S.GlowColor
@@ -706,7 +682,7 @@ do
             glowHL.Enabled = false
         end
 
-        -- Shadow
+        -- === SHADOW ===
         if S.ShadowEnabled and charRoot then
             shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.35)
             shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.8, 0))
@@ -716,7 +692,7 @@ do
             shadowPart.Transparency = 1
         end
 
-        -- Tracer 2D
+        -- === TRACER 2D ===
         if S.TracerEnabled and charRoot then
             local target2D = PartTo2D(charRoot)
             if target2D then
@@ -752,7 +728,7 @@ do
             tracerLine.Visible = false
         end
 
-        -- Box style
+        -- === BOX STYLE ===
         local boxStyle = S.BoxStyle or "2D"
         local headPart = clonedChar:FindFirstChild("Head")
         local rootPart = clonedChar:FindFirstChild("HumanoidRootPart") or clonedChar:FindFirstChild("Torso")
@@ -841,7 +817,7 @@ do
             box3D.Transparency = 1
         end
 
-        -- Off‑screen indicators (con visibilidad corregida)
+        -- === OFF‑SCREEN INDICATORS ===
         if S.OffscreenIndicators and not isVisible and charRoot then
             local viewportSize = viewport.AbsoluteSize
             local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
@@ -886,7 +862,7 @@ do
             for i = 1, 4 do offscreenFrames[i].Visible = false end
         end
 
-        -- Name, distance, weapon, health
+        -- === NAME, DISTANCE, WEAPON, HEALTH ===
         noTargetLabel.Visible = false
 
         if S.NameEnabled then
@@ -943,7 +919,7 @@ do
             hbBg.Visible = false
         end
 
-        -- Skeleton
+        -- === SKELETON ===
         if S.SkeletonEnabled then
             local parts = GetParts(clonedChar)
             local bones = {}
@@ -993,7 +969,7 @@ do
         end
     end)
 
-    -- Live blink
+    -- === LIVE BLINK ===
     task.spawn(function()
         while true do
             task.wait(0.8)
@@ -1005,9 +981,7 @@ do
         end
     end)
 
-    -- =========================================================================
-    -- API PÚBLICA
-    -- =========================================================================
+    -- === API ===
     _G.ESPPreview = _G.ESPPreview or {}
     _G.ESPPreview.Enabled = false
 
@@ -1036,6 +1010,6 @@ do
     task.wait(0.5)
     _G.ESPPreview:Enable()
 
-    print("=== ESP PREVIEW PANEL — CON TODAS LAS CORRECCIONES ===")
+    print("=== ESP PREVIEW PANEL — COMPLETAMENTE CORREGIDO ===")
     print("Controles: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
 end
