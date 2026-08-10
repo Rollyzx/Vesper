@@ -389,48 +389,66 @@ do
         table.insert(skelLines, f)
     end
 
-    -- === CLONE MANAGEMENT ===
-    local clonedChar = nil
-    local currentTarget = nil
-    local currentTargetDist = 0
-    local isDummy = false
+-- === CLONE MANAGEMENT ===
+local clonedChar = nil
+local currentTarget = nil
+local currentTargetDist = 0
+local isDummy = false
+local cloneAttempts = 0
+local maxCloneAttempts = 3
+local lastCloneAttemptTime = 0
 
-    local function DestroyClone()
-        if clonedChar then
-            pcall(function() clonedChar:Destroy() end)
-            clonedChar = nil
-        end
-        box3D.Transparency = 1
-        shadowPart.Transparency = 1
-        glowHL.Enabled = false
-        glowHL.Adornee = nil
-        tracerLine.Visible = false
+local function CloneCharacter(char)
+    if not char or not char.Parent then
+        DestroyClone()
+        return
     end
-
-    -- SAFE CloneCharacter
-    local function CloneCharacter(char)
-        if not char or not char.Parent then
-            DestroyClone()
+    
+    -- Evitar bucles infinitos de clonación
+    if cloneAttempts >= maxCloneAttempts then
+        local timeElapsed = tick() - lastCloneAttemptTime
+        if timeElapsed < 0.5 then
             return
         end
-        pcall(function()
-            DestroyClone()
-            local clone = char:Clone()
-            for _, v in ipairs(clone:GetDescendants()) do
-                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Sound") or v:IsA("Animator") then
-                    v:Destroy()
-                end
-            end
-            for _, v in ipairs(clone:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    v.Anchored = true
-                    v.CanCollide = false
-                end
-            end
-            clone.Parent = worldModel
-            clonedChar = clone
-        end)
+        cloneAttempts = 0
     end
+    
+    cloneAttempts = cloneAttempts + 1
+    lastCloneAttemptTime = tick()
+    
+    pcall(function()
+        DestroyClone()
+        
+        -- Verificar que el personaje aún exista antes de clonarlo
+        if not char or not char.Parent then
+            return
+        end
+        
+        local clone = char:Clone()
+        if not clone then
+            return
+        end
+        
+        -- Destruir scripts y componentes innecesarios
+        for _, v in ipairs(clone:GetDescendants()) do
+            if v:IsA("Script") or v:IsA("LocalScript") or 
+               v:IsA("Sound") or v:IsA("Animator") then
+                v:Destroy()
+            end
+        end
+        
+        -- Configurar partes del clon
+        for _, v in ipairs(clone:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Anchored = true
+                v.CanCollide = false
+            end
+        end
+        
+        clone.Parent = worldModel
+        clonedChar = clone
+    end)
+end
 
     local function SyncClone(original, clone)
         if not (original and clone) then return end
@@ -575,8 +593,8 @@ do
     local function checkVisibility(charRoot)
         if not charRoot then return false end
         local pos2D, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
-        if not pos2D then return false end
-        return onScreen and pos2D.Z > 0
+        if not pos2D or not onScreen then return false end
+        return pos2D.Z > 0
     end
 
     local function HideAll()
@@ -601,125 +619,122 @@ do
         print("[ESPPreview] New player joined:", player.Name)
     end)
 
-    -- === RENDER LOOP ===
-    local targetUpdateTimer = 0
-    local targetUpdateInterval = 0.5
+-- === RENDER LOOP ===
+local targetUpdateTimer = 0
+local targetUpdateInterval = 0.5
 
-    RunService.RenderStepped:Connect(function(dt)
-        if not _G.ESPPreview or not _G.ESPPreview.Enabled then
-            panel.Visible = false
-            DestroyClone()
-            return
-        end
-        panel.Visible = true
-        targetUpdateTimer = targetUpdateTimer + dt
+RunService.RenderStepped:Connect(function(dt)
+    if not _G.ESPPreview or not _G.ESPPreview.Enabled then
+        panel.Visible = false
+        DestroyClone()
+        return
+    end
+    panel.Visible = true
+    targetUpdateTimer = targetUpdateTimer + dt
 
-        -- Update target
-        if targetUpdateTimer >= targetUpdateInterval or currentTarget == nil then
-            targetUpdateTimer = 0
-            local newTarget, dist = GetNearestEnemy()
-            if newTarget ~= currentTarget then
-                currentTarget = newTarget
-                currentTargetDist = dist or 0
-                -- ONLY clone if character exists
-                if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
-                    CloneCharacter(currentTarget.Character)
-                else
-                    DestroyClone()
-                    currentTarget = nil
-                end
-            else
-                currentTargetDist = dist or currentTargetDist
-            end
-        end
-
-        -- VALIDATE target and clone
-        if not currentTarget or not currentTarget.Character or not currentTarget.Character.Parent then
-            DestroyClone()
-            currentTarget = nil
-            HideAll()
-            return
-        end
-
-        if not clonedChar or not clonedChar.Parent then
-            -- Try to reclone
-            if currentTarget.Character and currentTarget.Character.Parent then
+    -- Update target
+    if targetUpdateTimer >= targetUpdateInterval or currentTarget == nil then
+        targetUpdateTimer = 0
+        local newTarget, dist = GetNearestEnemy()
+        if newTarget ~= currentTarget then
+            currentTarget = newTarget
+            currentTargetDist = dist or 0
+            -- ONLY clone if character exists
+            if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
                 CloneCharacter(currentTarget.Character)
+            else
+                DestroyClone()
+                currentTarget = nil
             end
-            if not clonedChar or not clonedChar.Parent then
-                HideAll()
-                return
-            end
+        else
+            currentTargetDist = dist or currentTargetDist
         end
+    end
 
-        local char = currentTarget.Character
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local healthPct = humanoid and math.clamp(humanoid.Health / math.max(humanoid.MaxHealth,1), 0, 1) or 1
-        local localRoot = localPlayer.Character and (localPlayer.Character:FindFirstChild("HumanoidRootPart") or localPlayer.Character:FindFirstChild("Torso"))
-        local charRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
-        local dist = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
+    -- VALIDATE target and clone
+    if not currentTarget or not currentTarget.Character or not currentTarget.Character.Parent then
+        DestroyClone()
+        currentTarget = nil
+        HideAll()
+        return
+    end
 
-        if not charRoot then
+    if not clonedChar or not clonedChar.Parent then
+        -- Try to reclone
+        if currentTarget.Character and currentTarget.Character.Parent then
+            CloneCharacter(currentTarget.Character)
+        end
+        if not clonedChar or not clonedChar.Parent then
             HideAll()
             return
         end
+    end
 
-        local isVisible = checkVisibility(charRoot)
+    local char = currentTarget.Character
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local healthPct = humanoid and math.clamp(humanoid.Health / math.max(humanoid.MaxHealth,1), 0, 1) or 1
+    local localRoot = localPlayer.Character and (localPlayer.Character:FindFirstChild("HumanoidRootPart") or localPlayer.Character:FindFirstChild("Torso"))
+    local charRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    local dist = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
 
-        SyncClone(char, clonedChar)
-        UpdateCamera(clonedChar)
+    if not charRoot then
+        HideAll()
+        return
+    end
 
-        -- Show elements based on settings
-        ShowElements(currentTarget)
+    local isVisible = checkVisibility(charRoot)
 
-        -- === GLOW ===
-        if S.GlowEnabled then
-            glowHL.Enabled = true
-            glowHL.FillColor = S.GlowColor
-            glowHL.OutlineColor = S.GlowColor
-            glowHL.Adornee = clonedChar
-        else
-            glowHL.Enabled = false
-        end
+    SyncClone(char, clonedChar)
+    UpdateCamera(clonedChar)
 
-        -- === SHADOW ===
-        if S.ShadowEnabled and charRoot then
-            shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.35)
-            shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.8, 0))
-            local size = 1.8 + (dist / 120)
-            shadowPart.Size = Vector3.new(size, 0.1, size)
-        else
-            shadowPart.Transparency = 1
-        end
+    -- Show elements based on settings
+    ShowElements(currentTarget)
 
-        -- === TRACER 2D ===
-        if S.TracerEnabled and charRoot then
-            local target2D = PartTo2D(charRoot)
-            if target2D then
-                local vpSize = viewport.AbsoluteSize
-                local from = Vector2.new(vpSize.X/2, vpSize.Y)
-                local to = target2D
-                to = Vector2.new(
-                    math.clamp(to.X, 0, vpSize.X),
-                    math.clamp(to.Y, 0, vpSize.Y)
-                )
-                local dx = to.X - from.X
-                local dy = to.Y - from.Y
-                local len = math.sqrt(dx*dx + dy*dy)
-                if len > 2 then
-                    tracerLine.Size = UDim2.new(0, len, 0, 3)
-                    tracerLine.Position = UDim2.new(0, from.X, 0, from.Y)
-                    tracerLine.Rotation = math.deg(math.atan2(dy, dx))
-                    tracerLine.BackgroundColor3 = S.TracerColor
-                    tracerLine.Visible = true
-                    local glow = tracerLine:FindFirstChildOfClass("UIStroke")
-                    if glow then
-                        glow.Color = S.TracerColor
-                        glow.Thickness = 4
-                        glow.Transparency = 0.3
-                    end
-                else
-                    tracerLine.Visible = false
+    -- === GLOW ===
+    if S.GlowEnabled then
+        glowHL.Enabled = true
+        glowHL.FillColor = S.GlowColor
+        glowHL.OutlineColor = S.GlowColor
+        glowHL.Adornee = clonedChar
+    else
+        glowHL.Enabled = false
+    end
+
+    -- === SHADOW ===
+    if S.ShadowEnabled and charRoot then
+        shadowPart.Transparency = 1 - (S.ShadowOpacity or 0.35)
+        shadowPart.CFrame = CFrame.new(charRoot.Position + Vector3.new(0, -1.8, 0))
+        local size = 1.8 + (dist / 120)
+        shadowPart.Size = Vector3.new(size, 0.1, size)
+    else
+        shadowPart.Transparency = 1
+    end
+
+    -- === TRACER 2D ===
+    if S.TracerEnabled and charRoot then
+        local target2D = PartTo2D(charRoot)
+        if target2D then
+            local vpSize = viewport.AbsoluteSize
+            local from = Vector2.new(vpSize.X/2, vpSize.Y)
+            local to = target2D
+            to = Vector2.new(
+                math.clamp(to.X, 0, vpSize.X),
+                math.clamp(to.Y, 0, vpSize.Y)
+            )
+            local dx = to.X - from.X
+            local dy = to.Y - from.Y
+            local len = math.sqrt(dx*dx + dy*dy)
+            if len > 2 then
+                tracerLine.Size = UDim2.new(0, len, 0, 3)
+                tracerLine.Position = UDim2.new(0, from.X, 0, from.Y)
+                tracerLine.Rotation = math.deg(math.atan2(dy, dx))
+                tracerLine.BackgroundColor3 = S.TracerColor
+                tracerLine.Visible = true
+                local glow = tracerLine:FindFirstChildOfClass("UIStroke")
+                if glow then
+                    glow.Color = S.TracerColor
+                    glow.Thickness = 4
+                    glow.Transparency = 0.3
                 end
             else
                 tracerLine.Visible = false
@@ -727,247 +742,250 @@ do
         else
             tracerLine.Visible = false
         end
+    else
+        tracerLine.Visible = false
+    end
 
-        -- === BOX STYLE ===
-        local boxStyle = S.BoxStyle or "2D"
-        local headPart = clonedChar:FindFirstChild("Head")
-        local rootPart = clonedChar:FindFirstChild("HumanoidRootPart") or clonedChar:FindFirstChild("Torso")
+    -- === BOX STYLE ===
+    local boxStyle = S.BoxStyle or "2D"
+    local headPart = clonedChar:FindFirstChild("Head")
+    local rootPart = clonedChar:FindFirstChild("HumanoidRootPart") or clonedChar:FindFirstChild("Torso")
 
-        if S.BoxEnabled and boxStyle ~= "None" and rootPart then
-            local headPos2D, rootPos2D
-            if headPart then headPos2D = PartTo2D(headPart) end
-            rootPos2D = PartTo2D(rootPart)
-            local vpW = viewport.AbsoluteSize.X
-            local vpH = viewport.AbsoluteSize.Y
+    if S.BoxEnabled and boxStyle ~= "None" and rootPart then
+        local headPos2D, rootPos2D
+        if headPart then headPos2D = PartTo2D(headPart) end
+        rootPos2D = PartTo2D(rootPart)
+        local vpW = viewport.AbsoluteSize.X
+        local vpH = viewport.AbsoluteSize.Y
 
-            if boxStyle == "2D" then
-                if headPos2D and rootPos2D then
-                    local bh = math.abs(rootPos2D.Y - headPos2D.Y) + 22
-                    local bw = bh * 0.6
-                    local bx = vpW * 0.5 - bw * 0.5
-                    local by = headPos2D.Y - 12
-                    boxFrame.Size = UDim2.new(0, math.floor(bw), 0, math.floor(bh))
-                    boxFrame.Position = UDim2.new(0, math.floor(bx), 0, math.floor(by))
-                    boxStroke.Color = S.BoxColor
-                    boxStroke.Thickness = S.BoxThickness or 2
-                    boxFrame.Visible = true
-                else
-                    boxFrame.Visible = false
-                end
-                box3D.Transparency = 1
-            elseif boxStyle == "3D" then
-                box3D.Transparency = 0.25
-                local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
-                local height = (headPos - rootPart.Position).Y + 0.8
-                local width = height * 0.65
-                box3D.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, height/2, 0))
-                box3D.Size = Vector3.new(width, height, width)
-                box3D.Color = S.BoxColor
+        if boxStyle == "2D" then
+            if headPos2D and rootPos2D then
+                local bh = math.abs(rootPos2D.Y - headPos2D.Y) + 22
+                local bw = bh * 0.6
+                local bx = vpW * 0.5 - bw * 0.5
+                local by = headPos2D.Y - 12
+                boxFrame.Size = UDim2.new(0, math.floor(bw), 0, math.floor(bh))
+                boxFrame.Position = UDim2.new(0, math.floor(bx), 0, math.floor(by))
+                boxStroke.Color = S.BoxColor
+                boxStroke.Thickness = S.BoxThickness or 2
+                boxFrame.Visible = true
+            else
                 boxFrame.Visible = false
-            elseif boxStyle == "Arrow" then
-                if rootPos2D then
-                    local center = Vector2.new(vpW/2, vpH/2)
-                    local dir = (rootPos2D - center)
-                    local angle = math.atan2(dir.Y, dir.X)
-                    boxFrame.Size = UDim2.new(0,20,0,20)
-                    boxFrame.Position = UDim2.new(0, rootPos2D.X - 10, 0, rootPos2D.Y - 10)
-                    boxFrame.BackgroundTransparency = 1
-                    local img = boxFrame:FindFirstChild("ArrowImg")
-                    if not img then
-                        img = Instance.new("ImageLabel", boxFrame)
-                        img.Name = "ArrowImg"
-                        img.Size = UDim2.new(1,0,1,0)
-                        img.BackgroundTransparency = 1
-                        img.Image = "rbxassetid://8532000591"
-                        img.ZIndex = 13
-                    end
-                    img.ImageColor3 = S.BoxColor
-                    img.Rotation = math.deg(angle)
-                    boxFrame.Visible = true
-                    box3D.Transparency = 1
-                else
-                    boxFrame.Visible = false
+            end
+            box3D.Transparency = 1
+        elseif boxStyle == "3D" then
+            box3D.Transparency = 0.25
+            local headPos = headPart and headPart.Position or rootPart.Position + Vector3.new(0,2,0)
+            local height = (headPos - rootPart.Position).Y + 0.8
+            local width = height * 0.65
+            box3D.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, height/2, 0))
+            box3D.Size = Vector3.new(width, height, width)
+            box3D.Color = S.BoxColor
+            boxFrame.Visible = false
+        elseif boxStyle == "Arrow" then
+            if rootPos2D then
+                local center = Vector2.new(vpW/2, vpH/2)
+                local dir = (rootPos2D - center)
+                local angle = math.atan2(dir.Y, dir.X)
+                boxFrame.Size = UDim2.new(0,20,0,20)
+                boxFrame.Position = UDim2.new(0, rootPos2D.X - 10, 0, rootPos2D.Y - 10)
+                boxFrame.BackgroundTransparency = 1
+                local img = boxFrame:FindFirstChild("ArrowImg")
+                if not img then
+                    img = Instance.new("ImageLabel", boxFrame)
+                    img.Name = "ArrowImg"
+                    img.Size = UDim2.new(1,0,1,0)
+                    img.BackgroundTransparency = 1
+                    img.Image = "rbxassetid://8532000591"
+                    img.ZIndex = 13
                 end
-            elseif boxStyle == "Circle" then
-                if rootPos2D then
-                    local radius = 30 + (dist / 20)
-                    boxFrame.Size = UDim2.new(0, radius*2, 0, radius*2)
-                    boxFrame.Position = UDim2.new(0, rootPos2D.X - radius, 0, rootPos2D.Y - radius)
-                    boxFrame.BackgroundTransparency = 1
-                    local stroke = boxFrame:FindFirstChildOfClass("UIStroke")
-                    if not stroke then
-                        stroke = Instance.new("UIStroke", boxFrame)
-                    end
-                    stroke.Thickness = S.BoxThickness or 2
-                    stroke.Color = S.BoxColor
-                    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                    local corner = boxFrame:FindFirstChildOfClass("UICorner")
-                    if not corner then
-                        corner = Instance.new("UICorner", boxFrame)
-                    end
-                    corner.CornerRadius = UDim.new(1,0)
-                    boxFrame.Visible = true
-                    box3D.Transparency = 1
-                else
-                    boxFrame.Visible = false
+                img.ImageColor3 = S.BoxColor
+                img.Rotation = math.deg(angle)
+                boxFrame.Visible = true
+                box3D.Transparency = 1
+            else
+                boxFrame.Visible = false
+            end
+        elseif boxStyle == "Circle" then
+            if rootPos2D then
+                local radius = 30 + (dist / 20)
+                boxFrame.Size = UDim2.new(0, radius*2, 0, radius*2)
+                boxFrame.Position = UDim2.new(0, rootPos2D.X - radius, 0, rootPos2D.Y - radius)
+                boxFrame.BackgroundTransparency = 1
+                local stroke = boxFrame:FindFirstChildOfClass("UIStroke")
+                if not stroke then
+                    stroke = Instance.new("UIStroke", boxFrame)
+                end
+                stroke.Thickness = S.BoxThickness or 2
+                stroke.Color = S.BoxColor
+                stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                local corner = boxFrame:FindFirstChildOfClass("UICorner")
+                if not corner then
+                    corner = Instance.new("UICorner", boxFrame)
+                end
+                corner.CornerRadius = UDim.new(1,0)
+                boxFrame.Visible = true
+                box3D.Transparency = 1
+            else
+                boxFrame.Visible = false
+            end
+        end
+    else
+        boxFrame.Visible = false
+        box3D.Transparency = 1
+    end
+
+    -- === OFF‑SCREEN INDICATORS ===
+    if S.OffscreenIndicators and not isVisible and charRoot then
+        local viewportSize = viewport.AbsoluteSize
+        local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
+        local pos2D = vpCam:WorldToViewportPoint(charRoot.Position)
+        if pos2D and pos2D.Z > 0 then
+            local dir = Vector2.new(pos2D.X, pos2D.Y) - center
+            local angle = math.atan2(dir.Y, dir.X)
+            local edgeX, edgeY
+            if math.abs(dir.X) > math.abs(dir.Y) then
+                local sign = (dir.X > 0) and 1 or -1
+                edgeX = center.X + sign * (viewportSize.X/2 - 10)
+                edgeY = center.Y + (dir.Y / math.abs(dir.X)) * (viewportSize.X/2 - 10)
+            else
+                local sign = (dir.Y > 0) and 1 or -1
+                edgeY = center.Y + sign * (viewportSize.Y/2 - 10)
+                edgeX = center.X + (dir.X / math.abs(dir.Y)) * (viewportSize.Y/2 - 10)
+            end
+            local bestIdx = 1
+            local bestDist = math.huge
+            for i = 1, 4 do
+                local pos = offscreenFrames[i].AbsolutePosition + Vector2.new(8,8)
+                local d = (pos - Vector2.new(edgeX, edgeY)).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    bestIdx = i
                 end
             end
-        else
-            boxFrame.Visible = false
-            box3D.Transparency = 1
-        end
-
-        -- === OFF‑SCREEN INDICATORS ===
-        if S.OffscreenIndicators and not isVisible and charRoot then
-            local viewportSize = viewport.AbsoluteSize
-            local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-            local pos2D = vpCam:WorldToViewportPoint(charRoot.Position)
-            if pos2D and pos2D.Z > 0 then
-                local dir = Vector2.new(pos2D.X, pos2D.Y) - center
-                local angle = math.atan2(dir.Y, dir.X)
-                local edgeX, edgeY
-                if math.abs(dir.X) > math.abs(dir.Y) then
-                    local sign = (dir.X > 0) and 1 or -1
-                    edgeX = center.X + sign * (viewportSize.X/2 - 10)
-                    edgeY = center.Y + (dir.Y / math.abs(dir.X)) * (viewportSize.X/2 - 10)
+            for i = 1, 4 do
+                if i == bestIdx then
+                    offscreenFrames[i].Visible = true
+                    offscreenFrames[i].Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
+                    offscreenImages[i].ImageColor3 = S.OffscreenColor
+                    offscreenImages[i].Rotation = math.deg(angle)
                 else
-                    local sign = (dir.Y > 0) and 1 or -1
-                    edgeY = center.Y + sign * (viewportSize.Y/2 - 10)
-                    edgeX = center.X + (dir.X / math.abs(dir.Y)) * (viewportSize.Y/2 - 10)
+                    offscreenFrames[i].Visible = false
                 end
-                local bestIdx = 1
-                local bestDist = math.huge
-                for i = 1, 4 do
-                    local pos = offscreenFrames[i].AbsolutePosition + Vector2.new(8,8)
-                    local d = (pos - Vector2.new(edgeX, edgeY)).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestIdx = i
-                    end
-                end
-                for i = 1, 4 do
-                    if i == bestIdx then
-                        offscreenFrames[i].Visible = true
-                        offscreenFrames[i].Position = UDim2.new(0, edgeX - 8, 0, edgeY - 8)
-                        offscreenImages[i].ImageColor3 = S.OffscreenColor
-                        offscreenImages[i].Rotation = math.deg(angle)
-                    else
-                        offscreenFrames[i].Visible = false
-                    end
-                end
-            else
-                for i = 1, 4 do offscreenFrames[i].Visible = false end
             end
         else
             for i = 1, 4 do offscreenFrames[i].Visible = false end
         end
+    else
+        for i = 1, 4 do offscreenFrames[i].Visible = false end
+    end
 
-        -- === NAME, DISTANCE, WEAPON, HEALTH ===
-        noTargetLabel.Visible = false
+    -- === NAME, DISTANCE, WEAPON, HEALTH ===
+    noTargetLabel.Visible = false
 
-        if S.NameEnabled then
-            local nameText = currentTarget.Name
-            if isDummy then nameText = nameText .. " (YOU)" end
-            nameLabel.Text = nameText
-            nameLabel.TextColor3 = isDummy and Color3.fromRGB(255,255,100) or S.NameColor
-            nameLabel.Visible = true
-            nameShadow.Text = nameText
-            nameShadow.TextColor3 = Color3.fromRGB(0,0,0)
-            nameShadow.Visible = true
-        else
-            nameLabel.Visible = false
-            nameShadow.Visible = false
-        end
+    if S.NameEnabled then
+        local nameText = currentTarget.Name
+        if isDummy then nameText = nameText .. " (YOU)" end
+        nameLabel.Text = nameText
+        nameLabel.TextColor3 = isDummy and Color3.fromRGB(255,255,100) or S.NameColor
+        nameLabel.Visible = true
+        nameShadow.Text = nameText
+        nameShadow.TextColor3 = Color3.fromRGB(0,0,0)
+        nameShadow.Visible = true
+    else
+        nameLabel.Visible = false
+        nameShadow.Visible = false
+    end
 
-        if S.DistanceEnabled then
-            distLabel.Text = dist .. " m"
-            distLabel.Visible = true
-            distShadow.Text = dist .. " m"
-            distShadow.Visible = true
-        else
-            distLabel.Visible = false
-            distShadow.Visible = false
-        end
+    if S.DistanceEnabled then
+        distLabel.Text = dist .. " m"
+        distLabel.Visible = true
+        distShadow.Text = dist .. " m"
+        distShadow.Visible = true
+    else
+        distLabel.Visible = false
+        distShadow.Visible = false
+    end
 
-        if S.WeaponEnabled then
-            local tool = char:FindFirstChildOfClass("Tool")
-            local weaponName = tool and tool.Name or ""
-            local ammo = nil
-            if tool then
-                local ammoVal = tool:FindFirstChild("Ammo") or tool:FindFirstChild("CurrentAmmo") or tool:FindFirstChild("AmmoCount")
-                if ammoVal and ammoVal:IsA("NumberValue") then
-                    ammo = math.floor(ammoVal.Value)
-                end
+    if S.WeaponEnabled then
+        local tool = char:FindFirstChildOfClass("Tool")
+        local weaponName = tool and tool.Name or ""
+        local ammo = nil
+        if tool then
+            local ammoVal = tool:FindFirstChild("Ammo") or tool:FindFirstChild("CurrentAmmo") or tool:FindFirstChild("AmmoCount")
+            if ammoVal and ammoVal:IsA("NumberValue") then
+                ammo = math.floor(ammoVal.Value)
             end
-            local text = weaponName
-            if ammo then text = text .. " [" .. ammo .. "]" end
-            weaponLabel.Text = text
-            weaponLabel.Visible = true
-            weapShadow.Text = text
-            weapShadow.Visible = true
-        else
-            weaponLabel.Visible = false
-            weapShadow.Visible = false
         end
+        local text = weaponName
+        if ammo then text = text .. " [" .. ammo .. "]" end
+        weaponLabel.Text = text
+        weaponLabel.Visible = true
+        weapShadow.Text = text
+        weapShadow.Visible = true
+    else
+        weaponLabel.Visible = false
+        weapShadow.Visible = false
+    end
 
-        if S.HealthBarEnabled then
-            hbBg.Visible = true
-            hbFill.Size = UDim2.new(1, -2, healthPct, 0)
-            hbFill.Position = UDim2.new(0, 1, 1 - healthPct, 0)
-            hbFill.BackgroundColor3 = GetHPColor(healthPct)
-        else
-            hbBg.Visible = false
+    if S.HealthBarEnabled then
+        hbBg.Visible = true
+        hbFill.Size = UDim2.new(1, -2, healthPct, 0)
+        hbFill.Position = UDim2.new(0, 1, 1 - healthPct, 0)
+        hbFill.BackgroundColor3 = GetHPColor(healthPct)
+    else
+        hbBg.Visible = false
+    end
+
+    -- === SKELETON ===
+    if S.SkeletonEnabled then
+        local parts = GetParts(clonedChar)
+        local bones = {}
+        if parts.UpperTorso then
+            bones = {
+                {parts.Head, parts.UpperTorso},
+                {parts.UpperTorso, parts.LowerTorso},
+                {parts.UpperTorso, parts.RightUpperArm},
+                {parts.RightUpperArm, parts.RightLowerArm},
+                {parts.RightLowerArm, parts.RightHand},
+                {parts.UpperTorso, parts.LeftUpperArm},
+                {parts.LeftUpperArm, parts.LeftLowerArm},
+                {parts.LeftLowerArm, parts.LeftHand},
+                {parts.LowerTorso, parts.RightUpperLeg},
+                {parts.RightUpperLeg, parts.RightLowerLeg},
+                {parts.RightLowerLeg, parts.RightFoot},
+                {parts.LowerTorso, parts.LeftUpperLeg},
+                {parts.LeftUpperLeg, parts.LeftLowerLeg},
+                {parts.LeftLowerLeg, parts.LeftFoot},
+            }
+        elseif parts.Torso then
+            bones = {
+                {parts.Head, parts.Torso},
+                {parts.Torso, parts.RightArm},
+                {parts.Torso, parts.LeftArm},
+                {parts.Torso, parts.RightLeg},
+                {parts.Torso, parts.LeftLeg},
+            }
         end
-
-        -- === SKELETON ===
-        if S.SkeletonEnabled then
-            local parts = GetParts(clonedChar)
-            local bones = {}
-            if parts.UpperTorso then
-                bones = {
-                    {parts.Head, parts.UpperTorso},
-                    {parts.UpperTorso, parts.LowerTorso},
-                    {parts.UpperTorso, parts.RightUpperArm},
-                    {parts.RightUpperArm, parts.RightLowerArm},
-                    {parts.RightLowerArm, parts.RightHand},
-                    {parts.UpperTorso, parts.LeftUpperArm},
-                    {parts.LeftUpperArm, parts.LeftLowerArm},
-                    {parts.LeftLowerArm, parts.LeftHand},
-                    {parts.LowerTorso, parts.RightUpperLeg},
-                    {parts.RightUpperLeg, parts.RightLowerLeg},
-                    {parts.RightLowerLeg, parts.RightFoot},
-                    {parts.LowerTorso, parts.LeftUpperLeg},
-                    {parts.LeftUpperLeg, parts.LeftLowerLeg},
-                    {parts.LeftLowerLeg, parts.LeftFoot},
-                }
-            elseif parts.Torso then
-                bones = {
-                    {parts.Head, parts.Torso},
-                    {parts.Torso, parts.RightArm},
-                    {parts.Torso, parts.LeftArm},
-                    {parts.Torso, parts.RightLeg},
-                    {parts.Torso, parts.LeftLeg},
-                }
-            end
-            local skelColor = S.SkeletonColor
-            local thick = S.SkeletonThickness or 2
-            for i, bone in ipairs(bones) do
-                if i > MAX_BONES then break end
-                local s1 = bone[1] and PartTo2D(bone[1])
-                local s2 = bone[2] and PartTo2D(bone[2])
-                if s1 and s2 then
-                    DrawLine(skelLines[i], s1, s2, skelColor, thick)
-                else
-                    skelLines[i].Visible = false
-                end
-            end
-            for i = #bones + 1, MAX_BONES do
+        local skelColor = S.SkeletonColor
+        local thick = S.SkeletonThickness or 2
+        for i, bone in ipairs(bones) do
+            if i > MAX_BONES then break end
+            local s1 = bone[1] and PartTo2D(bone[1])
+            local s2 = bone[2] and PartTo2D(bone[2])
+            if s1 and s2 then
+                DrawLine(skelLines[i], s1, s2, skelColor, thick)
+            else
                 skelLines[i].Visible = false
             end
-        else
-            for _, l in ipairs(skelLines) do l.Visible = false end
         end
-    end)
+        for i = #bones + 1, MAX_BONES do
+            skelLines[i].Visible = false
+        end
+    else
+        for _, l in ipairs(skelLines) do l.Visible = false end
+    end
+end)
 
     -- === LIVE BLINK ===
     task.spawn(function()
