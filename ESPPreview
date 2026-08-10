@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — DUMMY TARGET, TRACER VISIBLE, OFFS‑CREEN INDICATORS
+-- ESPPreview.lua — CON TODAS LAS CORRECCIONES
 -- ============================================================================
 
 do
@@ -7,6 +7,14 @@ do
     local RunService  = game:GetService("RunService")
     local TweenService= game:GetService("TweenService")
     local localPlayer = Players.LocalPlayer
+
+    -- === LOGGING INITIAL ===
+    print("[ESPPreview] Players count:", #Players:GetPlayers())
+    print("[ESPPreview] Local player:", localPlayer and localPlayer.Name or "nil")
+
+    if #Players:GetPlayers() <= 1 then
+        warn("[ESPPreview] No hay otros jugadores en el servidor — usando dummy target")
+    end
 
     if not _G.ESPSettings then _G.ESPSettings = {} end
     local S = _G.ESPSettings
@@ -82,6 +90,15 @@ do
         S.ShadowOpacity = t.ShadowOpacity or 0.2
     end
     applyTheme(S.Theme)
+
+    -- === SAFE CALL WRAPPER ===
+    local function safeCall(func, ...)
+        local success, result = pcall(func, ...)
+        if not success then
+            warn("[ESPPreview] Error en llamada segura:", result)
+        end
+        return result
+    end
 
     -- ScreenGui
     local screenGui = Instance.new("ScreenGui")
@@ -230,7 +247,7 @@ do
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Tracer 2D line (thicker, brighter)
+    -- Tracer 2D line
     local tracerLine = Instance.new("Frame", overlay)
     tracerLine.Name = "TracerLine"
     tracerLine.BackgroundColor3 = Color3.fromRGB(0,255,200)
@@ -238,7 +255,6 @@ do
     tracerLine.AnchorPoint = Vector2.new(0,0.5)
     tracerLine.ZIndex = 14
     tracerLine.Visible = false
-    -- Add glow to tracer
     local tracerGlow = Instance.new("UIStroke", tracerLine)
     tracerGlow.Color = Color3.fromRGB(0,255,200)
     tracerGlow.Thickness = 3
@@ -397,7 +413,7 @@ do
 
     local function DestroyClone()
         if clonedChar then
-            pcall(function() clonedChar:Destroy() end)
+            safeCall(function() clonedChar:Destroy() end)
             clonedChar = nil
         end
         box3D.Transparency = 1
@@ -407,13 +423,13 @@ do
         tracerLine.Visible = false
     end
 
-    -- SAFE CloneCharacter with pcall
+    -- CORREGIDO: CloneCharacter con pcall y mejor manejo
     local function CloneCharacter(char)
         if not char or not char.Parent then
             DestroyClone()
             return
         end
-        local success, result = pcall(function()
+        safeCall(function()
             DestroyClone()
             local clone = char:Clone()
             for _, v in ipairs(clone:GetDescendants()) do
@@ -429,17 +445,12 @@ do
             end
             clone.Parent = worldModel
             clonedChar = clone
-            return clone
         end)
-        if not success then
-            DestroyClone()
-        end
-        return result
     end
 
     local function SyncClone(original, clone)
         if not (original and clone) then return end
-        pcall(function()
+        safeCall(function()
             for _, origPart in ipairs(original:GetDescendants()) do
                 if origPart:IsA("BasePart") then
                     local clonePart = clone:FindFirstChild(origPart.Name, true)
@@ -474,7 +485,7 @@ do
         return low:Lerp(high, pct)
     end
 
-    -- MODIFIED: returns enemy or local player as dummy
+    -- GetNearestEnemy (dummy si no hay)
     local function GetNearestEnemy()
         local localChar = localPlayer.Character
         local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
@@ -493,7 +504,6 @@ do
             end
         end
 
-        -- If no enemy found, use local player as dummy
         if not nearest then
             isDummy = true
             return localPlayer, 0
@@ -546,6 +556,46 @@ do
         end
     end
 
+    -- === NUEVA FUNCIÓN: ShowElements ===
+    local function ShowElements(target)
+        if not target then return end
+        local char = target.Character
+        if not char then return end
+
+        -- Mostrar/ocultar según configuración
+        nameLabel.Visible = S.NameEnabled
+        distLabel.Visible = S.DistanceEnabled
+        weaponLabel.Visible = S.WeaponEnabled
+        hbBg.Visible = S.HealthBarEnabled
+
+        -- Box 2D / Arrow / Circle
+        boxFrame.Visible = S.BoxEnabled and (S.BoxStyle == "2D" or S.BoxStyle == "Arrow" or S.BoxStyle == "Circle")
+        -- Box 3D
+        if S.BoxEnabled and S.BoxStyle == "3D" then
+            box3D.Transparency = 0.3
+        else
+            box3D.Transparency = 1
+        end
+
+        shadowPart.Transparency = S.ShadowEnabled and 1 - (S.ShadowOpacity or 0.35) or 1
+        glowHL.Enabled = S.GlowEnabled
+        tracerLine.Visible = S.TracerEnabled
+
+        for _, l in ipairs(skelLines) do
+            l.Visible = S.SkeletonEnabled
+        end
+
+        noTargetLabel.Visible = false
+    end
+
+    -- === CORRECCIÓN: checkVisibility ===
+    local function checkVisibility(charRoot)
+        if not charRoot then return false end
+        local pos2D, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
+        if not pos2D then return false end
+        return onScreen and pos2D.Z > 0
+    end
+
     local function HideAll()
         nameLabel.Visible = false; nameShadow.Visible = false
         boxFrame.Visible = false
@@ -574,6 +624,7 @@ do
         panel.Visible = true
         targetUpdateTimer = targetUpdateTimer + dt
 
+        -- Actualizar objetivo
         if targetUpdateTimer >= targetUpdateInterval or currentTarget == nil then
             targetUpdateTimer = 0
             local newTarget, dist = GetNearestEnemy()
@@ -606,15 +657,22 @@ do
         local charRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
         local dist = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
 
-        local isVisible = false
-        if charRoot then
-            local _, onScreen = vpCam:WorldToViewportPoint(charRoot.Position)
-            isVisible = onScreen
+        if not charRoot then
+            print("[ESPPreview] charRoot es nil")
+            HideAll()
+            return
         end
+
+        -- === CORRECCIÓN: visibilidad correcta ===
+        local isVisible = checkVisibility(charRoot)
 
         SyncClone(char, clonedChar)
         UpdateCamera(clonedChar)
 
+        -- Mostrar elementos según configuración
+        ShowElements(currentTarget)
+
+        -- Actualizar elementos individuales
         -- Glow
         if S.GlowEnabled then
             glowHL.Enabled = true
@@ -635,14 +693,13 @@ do
             shadowPart.Transparency = 1
         end
 
-        -- Tracer 2D (visible even if target off-screen, but line may extend outside viewport)
+        -- Tracer 2D
         if S.TracerEnabled and charRoot then
             local target2D = PartTo2D(charRoot)
             if target2D then
                 local vpSize = viewport.AbsoluteSize
                 local from = Vector2.new(vpSize.X/2, vpSize.Y)
                 local to = target2D
-                -- Clamp target to viewport edges to keep line inside if off-screen
                 to = Vector2.new(
                     math.clamp(to.X, 0, vpSize.X),
                     math.clamp(to.Y, 0, vpSize.Y)
@@ -651,12 +708,11 @@ do
                 local dy = to.Y - from.Y
                 local len = math.sqrt(dx*dx + dy*dy)
                 if len > 2 then
-                    tracerLine.Size = UDim2.new(0, len, 0, 3)  -- thicker
+                    tracerLine.Size = UDim2.new(0, len, 0, 3)
                     tracerLine.Position = UDim2.new(0, from.X, 0, from.Y)
                     tracerLine.Rotation = math.deg(math.atan2(dy, dx))
                     tracerLine.BackgroundColor3 = S.TracerColor
                     tracerLine.Visible = true
-                    -- Update glow stroke
                     local glow = tracerLine:FindFirstChildOfClass("UIStroke")
                     if glow then
                         glow.Color = S.TracerColor
@@ -762,7 +818,7 @@ do
             box3D.Transparency = 1
         end
 
-        -- Off‑screen indicators (only when target not visible)
+        -- Off‑screen indicators (con visibilidad corregida)
         if S.OffscreenIndicators and not isVisible and charRoot then
             local viewportSize = viewport.AbsoluteSize
             local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
@@ -954,10 +1010,9 @@ do
         end
     end
 
-    -- Auto‑enable
     task.wait(0.5)
     _G.ESPPreview:Enable()
 
-    print("=== ESP PREVIEW PANEL — DUMMY TARGET, TRACER Y OFFS‑CREEN FUNCIONALES ===")
+    print("=== ESP PREVIEW PANEL — CON TODAS LAS CORRECCIONES ===")
     print("Controles: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
 end
