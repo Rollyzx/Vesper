@@ -1,5 +1,5 @@
 -- ============================================================================
--- ESPPreview.lua — PCALL WRAPPER, SIN ERRORES GetDescendants
+-- ESPPreview.lua — DUMMY TARGET, TRACER VISIBLE, OFFS‑CREEN INDICATORS
 -- ============================================================================
 
 do
@@ -230,7 +230,7 @@ do
     overlay.ClipsDescendants = true
     overlay.ZIndex = 10
 
-    -- Tracer 2D line
+    -- Tracer 2D line (thicker, brighter)
     local tracerLine = Instance.new("Frame", overlay)
     tracerLine.Name = "TracerLine"
     tracerLine.BackgroundColor3 = Color3.fromRGB(0,255,200)
@@ -238,6 +238,11 @@ do
     tracerLine.AnchorPoint = Vector2.new(0,0.5)
     tracerLine.ZIndex = 14
     tracerLine.Visible = false
+    -- Add glow to tracer
+    local tracerGlow = Instance.new("UIStroke", tracerLine)
+    tracerGlow.Color = Color3.fromRGB(0,255,200)
+    tracerGlow.Thickness = 3
+    tracerGlow.Transparency = 0.5
 
     -- Labels
     local nameLabel = Instance.new("TextLabel", overlay)
@@ -388,6 +393,7 @@ do
     local clonedChar = nil
     local currentTarget = nil
     local currentTargetDist = 0
+    local isDummy = false
 
     local function DestroyClone()
         if clonedChar then
@@ -468,10 +474,12 @@ do
         return low:Lerp(high, pct)
     end
 
+    -- MODIFIED: returns enemy or local player as dummy
     local function GetNearestEnemy()
         local localChar = localPlayer.Character
         local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
         if not localRoot then return nil, math.huge end
+
         local nearest, nearestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= localPlayer and p.Character then
@@ -484,7 +492,15 @@ do
                 end
             end
         end
-        return nearest, nearestDist
+
+        -- If no enemy found, use local player as dummy
+        if not nearest then
+            isDummy = true
+            return localPlayer, 0
+        else
+            isDummy = false
+            return nearest, nearestDist
+        end
     end
 
     local function GetParts(model)
@@ -563,7 +579,7 @@ do
             local newTarget, dist = GetNearestEnemy()
             if newTarget ~= currentTarget then
                 currentTarget = newTarget
-                currentTargetDist = dist or math.huge
+                currentTargetDist = dist or 0
                 if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
                     CloneCharacter(currentTarget.Character)
                 else
@@ -574,7 +590,6 @@ do
             end
         end
 
-        -- Safety: if target lost character, destroy clone
         if currentTarget and (not currentTarget.Character or not currentTarget.Character.Parent) then
             DestroyClone()
         end
@@ -620,22 +635,34 @@ do
             shadowPart.Transparency = 1
         end
 
-        -- Tracer 2D
+        -- Tracer 2D (visible even if target off-screen, but line may extend outside viewport)
         if S.TracerEnabled and charRoot then
             local target2D = PartTo2D(charRoot)
             if target2D then
                 local vpSize = viewport.AbsoluteSize
                 local from = Vector2.new(vpSize.X/2, vpSize.Y)
                 local to = target2D
+                -- Clamp target to viewport edges to keep line inside if off-screen
+                to = Vector2.new(
+                    math.clamp(to.X, 0, vpSize.X),
+                    math.clamp(to.Y, 0, vpSize.Y)
+                )
                 local dx = to.X - from.X
                 local dy = to.Y - from.Y
                 local len = math.sqrt(dx*dx + dy*dy)
                 if len > 2 then
-                    tracerLine.Size = UDim2.new(0, len, 0, 2)
+                    tracerLine.Size = UDim2.new(0, len, 0, 3)  -- thicker
                     tracerLine.Position = UDim2.new(0, from.X, 0, from.Y)
                     tracerLine.Rotation = math.deg(math.atan2(dy, dx))
                     tracerLine.BackgroundColor3 = S.TracerColor
                     tracerLine.Visible = true
+                    -- Update glow stroke
+                    local glow = tracerLine:FindFirstChildOfClass("UIStroke")
+                    if glow then
+                        glow.Color = S.TracerColor
+                        glow.Thickness = 4
+                        glow.Transparency = 0.3
+                    end
                 else
                     tracerLine.Visible = false
                 end
@@ -735,7 +762,7 @@ do
             box3D.Transparency = 1
         end
 
-        -- Off‑screen indicators
+        -- Off‑screen indicators (only when target not visible)
         if S.OffscreenIndicators and not isVisible and charRoot then
             local viewportSize = viewport.AbsoluteSize
             local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
@@ -784,10 +811,12 @@ do
         noTargetLabel.Visible = false
 
         if S.NameEnabled then
-            nameLabel.Text = currentTarget.Name
-            nameLabel.TextColor3 = S.NameColor
+            local nameText = currentTarget.Name
+            if isDummy then nameText = nameText .. " (YOU)" end
+            nameLabel.Text = nameText
+            nameLabel.TextColor3 = isDummy and Color3.fromRGB(255,255,100) or S.NameColor
             nameLabel.Visible = true
-            nameShadow.Text = currentTarget.Name
+            nameShadow.Text = nameText
             nameShadow.TextColor3 = Color3.fromRGB(0,0,0)
             nameShadow.Visible = true
         else
@@ -929,6 +958,6 @@ do
     task.wait(0.5)
     _G.ESPPreview:Enable()
 
-    print("=== ESP PREVIEW PANEL — PCALL WRAPPER, SIN ERRORES ===")
+    print("=== ESP PREVIEW PANEL — DUMMY TARGET, TRACER Y OFFS‑CREEN FUNCIONALES ===")
     print("Controles: _G.ESPPreview:Enable() / :Disable() / :SetTheme('CSGO')")
 end
