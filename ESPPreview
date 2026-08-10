@@ -489,24 +489,36 @@ do
     local function GetNearestEnemy()
         local localChar = localPlayer.Character
         local localRoot = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso"))
-        if not localRoot then return nil, math.huge end
+        if not localRoot then 
+            -- If local player has no character, try using a dummy root at spawn
+            return nil, math.huge 
+        end
 
         local nearest, nearestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer and p.Character then
-                local root = p.Character:FindFirstChild("HumanoidRootPart") or p.Character:FindFirstChild("Torso")
-                if root and root.Parent then
-                    local dist = (root.Position - localRoot.Position).Magnitude
-                    if dist < nearestDist then
-                        nearest, nearestDist = p, dist
+            if p ~= localPlayer then
+                local char = p.Character
+                if char and char.Parent then
+                    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+                    if root and root.Parent then
+                        local dist = (root.Position - localRoot.Position).Magnitude
+                        if dist < nearestDist then
+                            nearest, nearestDist = p, dist
+                        end
                     end
                 end
             end
         end
 
+        -- If no valid enemy, use local player as dummy (if local has character)
         if not nearest then
-            isDummy = true
-            return localPlayer, 0
+            if localChar and localChar.Parent then
+                isDummy = true
+                return localPlayer, 0
+            else
+                isDummy = false
+                return nil, math.huge
+            end
         else
             isDummy = false
             return nearest, nearestDist
@@ -631,23 +643,35 @@ do
             if newTarget ~= currentTarget then
                 currentTarget = newTarget
                 currentTargetDist = dist or 0
+                -- ONLY clone if we have a valid character
                 if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
                     CloneCharacter(currentTarget.Character)
                 else
                     DestroyClone()
+                    currentTarget = nil
                 end
             else
                 currentTargetDist = dist or currentTargetDist
             end
         end
 
-        if currentTarget and (not currentTarget.Character or not currentTarget.Character.Parent) then
+        -- Early exit if no valid target or clone
+        if not currentTarget or not currentTarget.Character or not currentTarget.Character.Parent then
             DestroyClone()
-        end
-
-        if not (currentTarget and currentTarget.Character and currentTarget.Character.Parent and clonedChar and clonedChar.Parent) then
+            currentTarget = nil
             HideAll()
             return
+        end
+
+        if not clonedChar or not clonedChar.Parent then
+            -- Try to clone again if we have a target but no clone
+            if currentTarget and currentTarget.Character and currentTarget.Character.Parent then
+                CloneCharacter(currentTarget.Character)
+            end
+            if not clonedChar or not clonedChar.Parent then
+                HideAll()
+                return
+            end
         end
 
         local char = currentTarget.Character
@@ -658,12 +682,11 @@ do
         local dist = (localRoot and charRoot) and math.floor((charRoot.Position - localRoot.Position).Magnitude) or 0
 
         if not charRoot then
-            print("[ESPPreview] charRoot es nil")
             HideAll()
             return
         end
 
-        -- === CORRECCIÓN: visibilidad correcta ===
+        -- Visibilidad corregida
         local isVisible = checkVisibility(charRoot)
 
         SyncClone(char, clonedChar)
